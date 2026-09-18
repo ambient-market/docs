@@ -3,9 +3,10 @@ title: "HTTP API overview"
 description: "Request conventions, disclosure rules, idempotency, and error behavior for the HTTP API."
 ---
 
-The HTTP API exposes typed market commands and queries as JSON. It does not
-provide discovery, account management, credential issuance, delegation
-administration, payment, or a user interface.
+The HTTP API exposes typed market commands and queries as JSON plus a trusted
+operator provisioning command. It does not provide discovery, self-service
+account management, credential issuance, delegation administration, payment,
+or a user interface.
 
 Use the **HTTP endpoints** section in the sidebar for field types, required
 fields, constraints, request examples, response schemas, and status codes for
@@ -26,6 +27,7 @@ not send `occurredAt` or `actorId`.
 | `GET` | `/healthz` | Unsigned process health check. |
 | `POST` | `/v1/auth/challenges` | Request a one-time challenge for a registered actor key. |
 | `POST` | `/v1/auth/tokens` | Exchange a signed challenge for a short-lived bearer token. |
+| `POST` | `/v1/admin/identities` | Allowlisted operator provisions a principal, actor, and first Ed25519 key. |
 | `POST` | `/v1/markets` | Create a draft using a supported preset. |
 | `POST` | `/v1/markets/{marketId}/publish` | Publish a reviewed draft. |
 | `POST` | `/v1/markets/{marketId}/direct-claims` | Claim direct-claim capacity. |
@@ -69,6 +71,17 @@ commandId, principalId, authorityRef?
 
 Path identifiers are authoritative for market and commitment actions. When the
 authenticated actor differs from `principalId`, `authorityRef` is required.
+
+The trusted identity-provisioning body contains:
+
+```text
+commandId, principalId, actorId, keyId, publicKey
+```
+
+`publicKey` is an unpadded base64url Ed25519 public key. The route is mounted
+only when `AMBIENT_OPERATOR_ACTORS` configures at least one operator, and the
+authenticated caller must be on that allowlist. Creating distinct actor and
+principal IDs does not grant authority between them.
 
 ## Reads and disclosure
 

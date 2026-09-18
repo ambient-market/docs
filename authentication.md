@@ -5,12 +5,44 @@ description: "Authenticate provisioned HTTP and MCP actors and understand how Am
 
 Ambient authenticates a pre-registered Ed25519 actor key with a one-time proof,
 then issues a short-lived opaque bearer token usable on both HTTP and MCP.
-Key registration, rotation, account management, and public delegation
-administration remain outside the implemented API.
+An allowlisted operator can create the initial principal, actor, and key through
+a trusted administrative endpoint. Self-service registration, key rotation,
+account management, and public delegation administration remain outside the
+implemented API.
 
 Authentication establishes the actor sending a request. The `principalId` in
 a command identifies whom the actor represents; it does not authenticate the
 actor.
+
+## Trusted identity provisioning
+
+Set `AMBIENT_OPERATOR_ACTORS` to a comma-separated list of actors that can
+authenticate to the HTTP boundary, initially through bootstrap HMAC. An
+authenticated actor on that allowlist may call:
+
+```http
+POST /v1/admin/identities
+Content-Type: application/json
+
+{
+  "commandId": "provision-agent-1",
+  "principalId": "agent-1",
+  "actorId": "agent-1",
+  "keyId": "agent-key-1",
+  "publicKey": "<unpadded-base64url-Ed25519-public-key>"
+}
+```
+
+Ambient server-stamps the command and atomically creates all three records. The
+command ID is idempotent within the operator actor's namespace. Exact retries
+return the original result; changed content or an identifier already bound to
+different key material returns a conflict. Accepted decisions and
+identity-conflict rejections are retained durably. The endpoint is not mounted
+when the operator allowlist is empty.
+
+Provisioning an actor and a differently named principal does not itself grant
+the actor authority over that principal. A separate active delegation is still
+required. Use the same ID for both when provisioning a self-representing actor.
 
 ## Public-key proof and short-lived tokens
 
@@ -142,7 +174,6 @@ The current public HTTP and MCP surfaces do not create or revoke delegations.
 ## Current security boundary
 
 Use both transports only over TLS. Public-key proof authenticates a registered
-actor; it does not register keys, decide whom the actor may represent, or make
-delegations portable. Persisted Ambient delegations remain the authoritative
-authorization record. OAuth, DIDs, and verifiable credentials are not
-implemented.
+actor; it does not decide whom the actor may represent or make delegations
+portable. Persisted Ambient delegations remain the authoritative authorization
+record. OAuth, DIDs, and verifiable credentials are not implemented.

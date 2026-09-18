@@ -23,6 +23,8 @@ security:
 tags:
   - name: Authentication
     description: Prove control of a registered actor key and obtain a short-lived bearer token.
+  - name: Administration
+    description: Trusted operator commands that are not public self-service APIs.
   - name: Markets
     description: Create, publish, and read markets.
   - name: Participation
@@ -104,6 +106,41 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/admin/identities:
+    post:
+      tags: [Administration]
+      operationId: provisionIdentity
+      summary: Provision a principal, actor, and first public key
+      description: |
+        Atomically creates the minimum durable identity records required for
+        public-key authentication. The authenticated actor must be explicitly
+        listed in AMBIENT_OPERATOR_ACTORS. This is trusted provisioning, not a
+        public registration endpoint. Creating distinct principal and actor IDs
+        does not grant authority between them.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IdentityProvisioningRequest"
+      responses:
+        "201":
+          description: Identity material provisioned or an identical command replayed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdentityProvisioningResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -587,6 +624,91 @@ components:
         expiresAt:
           type: string
           format: date-time
+
+    IdentityProvisioningRequest:
+      type: object
+      additionalProperties: false
+      required: [commandId, principalId, actorId, keyId, publicKey]
+      properties:
+        commandId:
+          $ref: "#/components/schemas/CommandId"
+        principalId:
+          type: string
+          minLength: 1
+        actorId:
+          type: string
+          minLength: 1
+        keyId:
+          type: string
+          minLength: 1
+        publicKey:
+          type: string
+          minLength: 43
+          maxLength: 43
+          description: Unpadded base64url encoding of a 32-byte Ed25519 public key.
+
+    IdentityProvisioningResponse:
+      type: object
+      additionalProperties: false
+      required: [principal, actor, key]
+      properties:
+        principal:
+          $ref: "#/components/schemas/Principal"
+        actor:
+          $ref: "#/components/schemas/Actor"
+        key:
+          $ref: "#/components/schemas/ActorKey"
+
+    Principal:
+      type: object
+      additionalProperties: false
+      required: [id, createdAt]
+      properties:
+        id:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        disabledAt:
+          type: string
+          format: date-time
+
+    Actor:
+      type: object
+      additionalProperties: false
+      required: [id, createdAt]
+      properties:
+        id:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        disabledAt:
+          type: string
+          format: date-time
+
+    ActorKey:
+      type: object
+      additionalProperties: false
+      required: [id, actorId, algorithm, publicKey, createdAt]
+      properties:
+        id:
+          type: string
+        actorId:
+          type: string
+        algorithm:
+          type: string
+          const: Ed25519
+        publicKey:
+          type: string
+          description: Unpadded base64url encoding of the registered public key.
+        createdAt:
+          type: string
+          format: date-time
+        revokedAt:
+          type: string
+          format: date-time
+
     HealthResponse:
       type: object
       additionalProperties: false
@@ -1399,6 +1521,7 @@ components:
         - invalid_request
         - unauthenticated
         - forbidden
+        - identity_conflict
         - not_found
         - method_not_allowed
         - idempotency_conflict

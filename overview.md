@@ -38,6 +38,8 @@ Ambient currently provides:
 
 - an HTTP API and MCP endpoint that accept one short-lived bearer credential
   issued from Ed25519 actor proof, over the same application services;
+- an authenticated, allowlisted operator command that atomically provisions a
+  principal, actor, and first Ed25519 key with a durable decision record;
 - explicit principal, actor, and delegated-authority checks;
 - `direct-claim.v1` for free or posted terms, bounded capacity, optional holds,
   and configurable confirmation;
