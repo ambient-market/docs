@@ -12,16 +12,20 @@ fields, constraints, request examples, response schemas, and status codes for
 each operation. The complete machine-readable contract is also available as
 [OpenAPI YAML](/openapi.yaml).
 
-All `/v1` requests require [HMAC authentication](/authentication). Request
-bodies are strict JSON: unknown fields and multiple JSON values are rejected,
-and the maximum body size is 1 MiB. Ambient supplies authoritative command
-times; clients must not send `occurredAt` or `actorId`.
+Market and commitment requests require a short-lived bearer token or bootstrap
+HMAC authentication as described in [Authentication](/authentication). The
+challenge and token exchange routes are unsigned. Request bodies are strict
+JSON: unknown fields and multiple JSON values are rejected, and the maximum
+body size is 1 MiB. Ambient supplies authoritative command times; clients must
+not send `occurredAt` or `actorId`.
 
 ## Routes
 
 | Method | Route | Purpose |
 | --- | --- | --- |
 | `GET` | `/healthz` | Unsigned process health check. |
+| `POST` | `/v1/auth/challenges` | Request a one-time challenge for a registered actor key. |
+| `POST` | `/v1/auth/tokens` | Exchange a signed challenge for a short-lived bearer token. |
 | `POST` | `/v1/markets` | Create a draft using a supported preset. |
 | `POST` | `/v1/markets/{marketId}/publish` | Publish a reviewed draft. |
 | `POST` | `/v1/markets/{marketId}/direct-claims` | Claim direct-claim capacity. |

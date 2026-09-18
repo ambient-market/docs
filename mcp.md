@@ -4,7 +4,8 @@ description: "Connect to Ambient through MCP and use the implemented market tool
 ---
 
 Ambient exposes a stateless Streamable HTTP MCP endpoint at `POST /mcp` using
-the official Go SDK. Connect with a provisioned bearer token as described in
+the official Go SDK. Connect with the short-lived bearer token obtained through
+Ed25519 actor proof, or a bootstrap static token, as described in
 [Authentication](/authentication).
 
 MCP is a transport adapter, not a separate market runtime. Its tools call the

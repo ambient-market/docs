@@ -36,8 +36,8 @@ or [MCP reference](/mcp) for exact inputs.
 
 Ambient currently provides:
 
-- a signed HTTP API and a bearer-authenticated MCP endpoint over the same
-  application services;
+- an HTTP API and MCP endpoint that accept one short-lived bearer credential
+  issued from Ed25519 actor proof, over the same application services;
 - explicit principal, actor, and delegated-authority checks;
 - `direct-claim.v1` for free or posted terms, bounded capacity, optional holds,
   and configurable confirmation;
@@ -57,7 +57,7 @@ Ambient does not currently provide:
 - a consumer or operator user interface;
 - public discovery;
 - self-service accounts, credential issuance, or delegation management;
-- OAuth, public-key identity, or verifiable-credential issuance;
+- self-service identity/key registration, OAuth, or verifiable-credential issuance;
 - payment authorization, collection, escrow, settlement, refunds, or disputes;
 - fulfillment orchestration; or
 - participant notifications or subscriptions.

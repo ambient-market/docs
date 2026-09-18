@@ -19,7 +19,10 @@ security:
   - AmbientActor: []
     AmbientTimestamp: []
     AmbientSignature: []
+  - AmbientBearer: []
 tags:
+  - name: Authentication
+    description: Prove control of a registered actor key and obtain a short-lived bearer token.
   - name: Markets
     description: Create, publish, and read markets.
   - name: Participation
@@ -49,6 +52,60 @@ paths:
                 status: ok
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
+
+  /v1/auth/challenges:
+    post:
+      tags: [Authentication]
+      operationId: createAuthenticationChallenge
+      summary: Request an actor-key challenge
+      description: Creates a short-lived, one-time challenge for a pre-registered Ed25519 actor key.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthenticationChallengeRequest"
+      responses:
+        "201":
+          description: Challenge created. Decode and sign signingPayload exactly.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthenticationChallenge"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/tokens:
+    post:
+      tags: [Authentication]
+      operationId: exchangeAuthenticationChallenge
+      summary: Exchange an Ed25519 proof for a bearer token
+      description: Consumes one unexpired challenge and returns a short-lived opaque token usable on HTTP and MCP.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthenticationTokenRequest"
+      responses:
+        "201":
+          description: Proof accepted and token issued.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthenticationTokenGrant"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /v1/markets:
     post:
@@ -391,6 +448,10 @@ components:
       description: |
         Ambient-HMAC followed by a space and the unpadded base64url HMAC-SHA256
         signature. See Authentication and authority for the canonical input.
+    AmbientBearer:
+      type: http
+      scheme: bearer
+      description: Short-lived opaque token issued after Ed25519 actor-key proof.
 
   parameters:
     MarketId:
@@ -466,6 +527,66 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
 
   schemas:
+    AuthenticationChallengeRequest:
+      type: object
+      additionalProperties: false
+      required: [actorId, keyId]
+      properties:
+        actorId:
+          type: string
+          minLength: 1
+        keyId:
+          type: string
+          minLength: 1
+    AuthenticationChallenge:
+      type: object
+      additionalProperties: false
+      required: [id, actorId, keyId, audience, nonce, expiresAt, signingPayload]
+      properties:
+        id:
+          type: string
+        actorId:
+          type: string
+        keyId:
+          type: string
+        audience:
+          type: string
+        nonce:
+          type: string
+          description: Unpadded base64url nonce; repeat it during exchange.
+        expiresAt:
+          type: string
+          format: date-time
+        signingPayload:
+          type: string
+          description: Unpadded base64url bytes to sign directly with the registered Ed25519 private key.
+    AuthenticationTokenRequest:
+      type: object
+      additionalProperties: false
+      required: [challengeId, nonce, signature]
+      properties:
+        challengeId:
+          type: string
+        nonce:
+          type: string
+        signature:
+          type: string
+          description: Unpadded base64url Ed25519 signature over the decoded signingPayload.
+    AuthenticationTokenGrant:
+      type: object
+      additionalProperties: false
+      required: [accessToken, tokenType, actorId, expiresAt]
+      properties:
+        accessToken:
+          type: string
+        tokenType:
+          type: string
+          const: Bearer
+        actorId:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
     HealthResponse:
       type: object
       additionalProperties: false

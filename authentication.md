@@ -3,18 +3,59 @@ title: "Authentication and authority"
 description: "Authenticate provisioned HTTP and MCP actors and understand how Ambient evaluates delegated authority."
 ---
 
-Ambient currently uses provisioned actor credentials. Credential issuance,
-rotation, account management, and public delegation administration are outside
-the implemented API.
+Ambient authenticates a pre-registered Ed25519 actor key with a one-time proof,
+then issues a short-lived opaque bearer token usable on both HTTP and MCP.
+Key registration, rotation, account management, and public delegation
+administration remain outside the implemented API.
 
 Authentication establishes the actor sending a request. The `principalId` in
 a command identifies whom the actor represents; it does not authenticate the
 actor.
 
-## Signed HTTP requests
+## Public-key proof and short-lived tokens
 
-Every `/v1` request uses an actor ID and HMAC secret provisioned out of band.
-The request includes:
+Request an unsigned challenge:
+
+```http
+POST /v1/auth/challenges
+Content-Type: application/json
+
+{"actorId":"agent-1","keyId":"key-1"}
+```
+
+The response contains the actor, key, audience, one-time nonce, expiry, and
+`signingPayload`. Decode `signingPayload` from unpadded base64url and sign the
+resulting bytes directly with the registered Ed25519 private key. Exchange the
+proof before the challenge expires:
+
+```http
+POST /v1/auth/tokens
+Content-Type: application/json
+
+{
+  "challengeId": "challenge_...",
+  "nonce": "...",
+  "signature": "<unpadded-base64url-Ed25519-signature>"
+}
+```
+
+The result contains an opaque `accessToken`, token type `Bearer`, actor ID, and
+expiry. Send it to either the HTTP API or `/mcp`:
+
+```text
+Authorization: Bearer <accessToken>
+```
+
+Challenges are single-use. Ambient stores hashes rather than raw challenge
+nonces or access tokens. Token validation checks its audience and expiry plus
+the actor's and key's current active state. Defaults are a two-minute challenge
+and a fifteen-minute token, configurable with `AUTH_CHALLENGE_TTL`,
+`AUTH_TOKEN_TTL`, and `AUTH_AUDIENCE`.
+
+## Bootstrap HMAC requests
+
+The environment-backed HMAC scheme remains available as a bootstrap and
+operator-compatibility path. A signed request includes:
 
 ```text
 X-Ambient-Actor: restaurant-1
@@ -71,19 +112,19 @@ Sign the exact serialized body that is transmitted. Reformatting JSON after
 signing changes its hash and invalidates the request. Requests outside the
 deployment's configured clock-skew window are rejected.
 
-`GET /healthz` is the only unsigned HTTP route.
+`GET /healthz` and the two `/v1/auth/*` proof routes are unsigned.
 
-## MCP bearer tokens
+## Bootstrap MCP bearer tokens
 
-The Streamable HTTP MCP endpoint accepts a provisioned opaque token:
+The Streamable HTTP MCP endpoint also accepts a provisioned static opaque token:
 
 ```text
 Authorization: Bearer <token>
 ```
 
-The token maps to one actor. It is distinct from the HTTP HMAC secret. The MCP
-adapter passes the resulting actor through the same application authority
-checks used by HTTP.
+The static token maps to one actor and is distinct from the HTTP HMAC secret.
+Both static and short-lived bearer credentials pass the resulting actor through
+the same application authority checks used by HTTP.
 
 ## Acting for another principal
 
@@ -100,7 +141,8 @@ The current public HTTP and MCP surfaces do not create or revoke delegations.
 
 ## Current security boundary
 
-Use both transports only over TLS. Static HMAC secrets and bearer tokens are
-the first implemented authentication mechanisms, not the final public identity
-system. OAuth, public-key registration, DIDs, and verifiable credentials are
-not implemented.
+Use both transports only over TLS. Public-key proof authenticates a registered
+actor; it does not register keys, decide whom the actor may represent, or make
+delegations portable. Persisted Ambient delegations remain the authoritative
+authorization record. OAuth, DIDs, and verifiable credentials are not
+implemented.
