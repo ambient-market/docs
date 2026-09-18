@@ -4,9 +4,9 @@ description: "Request conventions, disclosure rules, idempotency, and error beha
 ---
 
 The HTTP API exposes typed market commands and queries as JSON plus a trusted
-operator provisioning command. It does not provide discovery, self-service
-account management, credential issuance, delegation administration, payment,
-or a user interface.
+operator provisioning command and principal-controlled delegation commands. It
+does not provide discovery, self-service account management, credential
+issuance, payment, or a user interface.
 
 Use the **HTTP endpoints** section in the sidebar for field types, required
 fields, constraints, request examples, response schemas, and status codes for
@@ -28,6 +28,8 @@ not send `occurredAt` or `actorId`.
 | `POST` | `/v1/auth/challenges` | Request a one-time challenge for a registered actor key. |
 | `POST` | `/v1/auth/tokens` | Exchange a signed challenge for a short-lived bearer token. |
 | `POST` | `/v1/admin/identities` | Allowlisted operator provisions a principal, actor, and first Ed25519 key. |
+| `POST` | `/v1/delegations` | Self-representing principal grants bounded scopes to an actor. |
+| `POST` | `/v1/delegations/{delegationId}/revoke` | Self-representing principal revokes its delegation. |
 | `POST` | `/v1/markets` | Create a draft using a supported preset. |
 | `POST` | `/v1/markets/{marketId}/publish` | Publish a reviewed draft. |
 | `POST` | `/v1/markets/{marketId}/direct-claims` | Claim direct-claim capacity. |
@@ -82,6 +84,17 @@ commandId, principalId, actorId, keyId, publicKey
 only when `AMBIENT_OPERATOR_ACTORS` configures at least one operator, and the
 authenticated caller must be on that allowlist. Creating distinct actor and
 principal IDs does not grant authority between them.
+
+Issue-delegation bodies contain:
+
+```text
+commandId, delegationId, principalId, delegateActorId, scopes, validUntil?
+```
+
+Revoke-delegation bodies contain `commandId` and `principalId`; the delegation
+ID comes from the path. Only an authenticated actor whose ID equals
+`principalId` can manage delegations. Delegation management cannot itself be
+delegated in the current version.
 
 ## Reads and disclosure
 
@@ -138,3 +151,5 @@ capacity_exhausted
 Transport and persistence failures may also return `invalid_request`,
 `unauthenticated`, `forbidden`, `not_found`, `method_not_allowed`,
 `idempotency_conflict`, `concurrent_update`, or `internal_error`.
+Delegation commands may additionally return `identity_not_found`,
+`delegation_not_found`, `delegation_conflict`, or `delegation_inactive`.

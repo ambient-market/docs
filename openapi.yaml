@@ -25,6 +25,8 @@ tags:
     description: Prove control of a registered actor key and obtain a short-lived bearer token.
   - name: Administration
     description: Trusted operator commands that are not public self-service APIs.
+  - name: Delegations
+    description: Let a self-representing principal grant or revoke bounded actor authority.
   - name: Markets
     description: Create, publish, and read markets.
   - name: Participation
@@ -139,6 +141,75 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/delegations:
+    post:
+      tags: [Delegations]
+      operationId: issueDelegation
+      summary: Grant bounded authority to an actor
+      description: |
+        Issues a persisted delegation beginning at the server-stamped command
+        time. The authenticated actor must have the same ID as principalId;
+        delegation management is not itself delegable in this version.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IssueDelegationRequest"
+      responses:
+        "201":
+          description: Delegation issued or an identical command replayed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Delegation"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/delegations/{delegationId}/revoke:
+    post:
+      tags: [Delegations]
+      operationId: revokeDelegation
+      summary: Revoke a delegation
+      description: Revokes a delegation owned by the authenticated self-representing principal.
+      parameters:
+        - $ref: "#/components/parameters/DelegationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RevokeDelegationRequest"
+      responses:
+        "200":
+          description: Delegation revoked or an identical command replayed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Delegation"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
         "500":
@@ -508,6 +579,14 @@ components:
       schema:
         type: string
         minLength: 1
+    DelegationId:
+      name: delegationId
+      in: path
+      required: true
+      description: Client-selected delegation identifier.
+      schema:
+        type: string
+        minLength: 1
 
   responses:
     BadRequest:
@@ -703,6 +782,77 @@ components:
           type: string
           description: Unpadded base64url encoding of the registered public key.
         createdAt:
+          type: string
+          format: date-time
+        revokedAt:
+          type: string
+          format: date-time
+
+    IssueDelegationRequest:
+      type: object
+      additionalProperties: false
+      required: [commandId, delegationId, principalId, delegateActorId, scopes]
+      properties:
+        commandId:
+          $ref: "#/components/schemas/CommandId"
+        delegationId:
+          type: string
+          minLength: 1
+        principalId:
+          $ref: "#/components/schemas/PrincipalId"
+        delegateActorId:
+          type: string
+          minLength: 1
+        scopes:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/AuthorityScope"
+        validUntil:
+          type: string
+          format: date-time
+
+    RevokeDelegationRequest:
+      type: object
+      additionalProperties: false
+      required: [commandId, principalId]
+      properties:
+        commandId:
+          $ref: "#/components/schemas/CommandId"
+        principalId:
+          $ref: "#/components/schemas/PrincipalId"
+
+    AuthorityScope:
+      type: string
+      enum:
+        - market:create
+        - market:publish
+        - market:claim
+        - market:bid
+        - commitment:confirm
+        - commitment:decline
+        - credential:issue
+
+    Delegation:
+      type: object
+      additionalProperties: false
+      required: [id, principalId, actorId, scopes, validFrom]
+      properties:
+        id:
+          type: string
+        principalId:
+          type: string
+        actorId:
+          type: string
+        scopes:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuthorityScope"
+        validFrom:
+          type: string
+          format: date-time
+        validUntil:
           type: string
           format: date-time
         revokedAt:
@@ -1522,6 +1672,10 @@ components:
         - unauthenticated
         - forbidden
         - identity_conflict
+        - identity_not_found
+        - delegation_not_found
+        - delegation_conflict
+        - delegation_inactive
         - not_found
         - method_not_allowed
         - idempotency_conflict

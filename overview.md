@@ -40,6 +40,8 @@ Ambient currently provides:
   issued from Ed25519 actor proof, over the same application services;
 - an authenticated, allowlisted operator command that atomically provisions a
   principal, actor, and first Ed25519 key with a durable decision record;
+- principal-controlled HTTP commands that issue and revoke bounded, persisted
+  delegations with actor-scoped idempotency;
 - explicit principal, actor, and delegated-authority checks;
 - `direct-claim.v1` for free or posted terms, bounded capacity, optional holds,
   and configurable confirmation;
@@ -58,7 +60,7 @@ Ambient does not currently provide:
 
 - a consumer or operator user interface;
 - public discovery;
-- self-service accounts, credential issuance, or delegation management;
+- self-service accounts or credential issuance;
 - self-service identity/key registration, OAuth, or verifiable-credential issuance;
 - payment authorization, collection, escrow, settlement, refunds, or disputes;
 - fulfillment orchestration; or

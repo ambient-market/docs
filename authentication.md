@@ -7,8 +7,8 @@ Ambient authenticates a pre-registered Ed25519 actor key with a one-time proof,
 then issues a short-lived opaque bearer token usable on both HTTP and MCP.
 An allowlisted operator can create the initial principal, actor, and key through
 a trusted administrative endpoint. Self-service registration, key rotation,
-account management, and public delegation administration remain outside the
-implemented API.
+and account management remain outside the implemented API. A self-representing
+principal can issue and revoke scoped delegations through HTTP.
 
 Authentication establishes the actor sending a request. The `principalId` in
 a command identifies whom the actor represents; it does not authenticate the
@@ -43,6 +43,46 @@ when the operator allowlist is empty.
 Provisioning an actor and a differently named principal does not itself grant
 the actor authority over that principal. A separate active delegation is still
 required. Use the same ID for both when provisioning a self-representing actor.
+
+## Issuing and revoking authority
+
+The authenticated actor whose ID equals the principal ID can issue a bounded
+delegation:
+
+```http
+POST /v1/delegations
+Content-Type: application/json
+
+{
+  "commandId": "issue-delegation-1",
+  "delegationId": "delegation-1",
+  "principalId": "restaurant-1",
+  "delegateActorId": "restaurant-agent-1",
+  "scopes": ["market:create", "market:publish"],
+  "validUntil": "2026-10-01T00:00:00Z"
+}
+```
+
+`validUntil` is optional. Ambient uses the server-stamped command time as
+`validFrom`. Revoke the delegation with:
+
+```http
+POST /v1/delegations/delegation-1/revoke
+Content-Type: application/json
+
+{"commandId":"revoke-delegation-1","principalId":"restaurant-1"}
+```
+
+Issue and revoke command IDs are scoped to the authenticated actor. Exact
+retries return the stored decision, while changed content returns an
+idempotency conflict. Missing identities, duplicate delegation IDs, missing
+delegations, and repeated revocations are retained as deterministic rejected
+decisions.
+
+Delegation management is intentionally not delegable in this version: an
+existing agent cannot issue another delegation even if it can otherwise act
+for the principal. The principal therefore needs a self-representing control
+actor, while operational agents may use distinct actor IDs.
 
 ## Public-key proof and short-lived tokens
 
@@ -169,7 +209,8 @@ must:
 - be active at the time of authorization; and
 - not be revoked.
 
-The current public HTTP and MCP surfaces do not create or revoke delegations.
+The HTTP surface issues and revokes delegations. MCP market tools consume those
+same persisted delegations but do not yet manage them.
 
 ## Current security boundary
 
