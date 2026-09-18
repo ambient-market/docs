@@ -1,0 +1,1297 @@
+openapi: 3.1.0
+info:
+  title: Ambient HTTP API
+  version: 0.1.0
+  description: |
+    Create and operate deterministic markets through signed HTTP commands.
+
+    Request bodies use strict JSON. Unknown fields and multiple JSON values are
+    rejected. The maximum request body size is 1 MiB. Ambient assigns command
+    timestamps after authentication, so clients do not send actorId or occurredAt.
+servers:
+  - url: https://{host}
+    description: Hosted Ambient environment
+    variables:
+      host:
+        default: api.example.com
+        description: API host supplied with your provisioned credentials.
+security:
+  - AmbientActor: []
+    AmbientTimestamp: []
+    AmbientSignature: []
+tags:
+  - name: Markets
+    description: Create, publish, and read markets.
+  - name: Participation
+    description: Submit claims and sealed bids to open markets.
+  - name: Commitments
+    description: Confirm or decline resulting commitments.
+  - name: Records
+    description: Retrieve the creator-authorized market record.
+  - name: System
+    description: Check service health.
+paths:
+  /healthz:
+    get:
+      tags: [System]
+      operationId: getHealth
+      summary: Check service health
+      description: Returns process health. This endpoint does not require authentication.
+      security: []
+      responses:
+        "200":
+          description: The API process is healthy.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: ok
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+
+  /v1/markets:
+    post:
+      tags: [Markets]
+      operationId: createMarket
+      summary: Create a market draft
+      description: |
+        Creates an inactive draft from a subject and a supported mechanism.
+        Review the returned normalized configuration and version before publishing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMarketRequest"
+            examples:
+              directClaim:
+                summary: Posted-price direct claim
+                value:
+                  commandId: table-create-1
+                  marketId: table-2026-09-19-1900
+                  principalId: restaurant-1
+                  subject:
+                    schema: restaurant-table.v1
+                    data:
+                      partySize: 2
+                      startsAt: "2026-09-19T19:00:00Z"
+                  mechanism:
+                    presetId: direct-claim.v1
+                    config:
+                      capacity: 1
+                      pricing:
+                        mode: posted
+                        amountMinor: 7500
+                        currency: USD
+                      confirmation: participant
+                      holdDurationSeconds: 600
+              sealedAuction:
+                summary: Sealed second-price auction
+                value:
+                  commandId: table-auction-create-1
+                  marketId: table-auction-2026-09-19-1900
+                  principalId: restaurant-1
+                  subject:
+                    schema: restaurant-table.v1
+                    data:
+                      partySize: 2
+                      startsAt: "2026-09-19T19:00:00Z"
+                  mechanism:
+                    presetId: sealed-forward-auction.v1
+                    config:
+                      currency: USD
+                      reserveAmountMinor: 5000
+                      closesAt: "2026-09-19T18:45:00Z"
+                      holdDurationSeconds: 600
+      responses:
+        "201":
+          description: Draft created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/markets/{marketId}/publish:
+    post:
+      tags: [Markets]
+      operationId: publishMarket
+      summary: Publish a market draft
+      description: |
+        Opens a reviewed draft to participant actions. Only the creator principal
+        can publish it. A sealed auction must be published before its closesAt time.
+      parameters:
+        - $ref: "#/components/parameters/MarketId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublishMarketRequest"
+            example:
+              commandId: table-publish-1
+              expectedVersion: 1
+              principalId: restaurant-1
+      responses:
+        "200":
+          description: Market published.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/markets/{marketId}/direct-claims:
+    post:
+      tags: [Participation]
+      operationId: submitDirectClaim
+      summary: Submit a direct claim
+      description: |
+        Claims capacity in an open direct-claim.v1 market. Omit expectedVersion to
+        let Ambient order competing claims by authoritative server arrival.
+      parameters:
+        - $ref: "#/components/parameters/MarketId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DirectClaimRequest"
+            example:
+              commandId: table-claim-1
+              principalId: diner-1
+      responses:
+        "200":
+          description: Claim accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketActionResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/markets/{marketId}/sealed-bids:
+    post:
+      tags: [Participation]
+      operationId: submitSealedBid
+      summary: Submit a sealed bid
+      description: |
+        Submits one private bid for a principal in an open
+        sealed-forward-auction.v1 market. The response contains an amount-free
+        receipt. A principal cannot replace or submit a second active bid.
+      parameters:
+        - $ref: "#/components/parameters/MarketId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SealedBidRequest"
+            example:
+              commandId: table-bid-1
+              principalId: diner-1
+              amountMinor: 8800
+              currency: USD
+      responses:
+        "200":
+          description: Bid accepted without disclosing its amount.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketActionResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/commitments/{commitmentId}/confirm:
+    post:
+      tags: [Commitments]
+      operationId: confirmCommitment
+      summary: Confirm a commitment
+      description: |
+        Records confirmation from a principal listed in
+        requiredConfirmationPrincipalIds before expiresAt.
+      parameters:
+        - $ref: "#/components/parameters/CommitmentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommitmentActionRequest"
+            example:
+              commandId: table-confirm-1
+              principalId: diner-1
+      responses:
+        "200":
+          description: Confirmation recorded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketActionResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/commitments/{commitmentId}/decline:
+    post:
+      tags: [Commitments]
+      operationId: declineCommitment
+      summary: Decline a commitment
+      description: |
+        Declines a pending commitment before expiresAt. Direct-claim capacity is
+        released. A sealed auction may promote the next eligible bid.
+      parameters:
+        - $ref: "#/components/parameters/CommitmentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommitmentActionRequest"
+            example:
+              commandId: table-decline-1
+              principalId: diner-1
+      responses:
+        "200":
+          description: Commitment declined.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketActionResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/markets/{marketId}:
+    get:
+      tags: [Markets]
+      operationId: getMarket
+      summary: Get a market
+      description: Returns the current market snapshot to any authenticated actor.
+      parameters:
+        - $ref: "#/components/parameters/MarketId"
+      responses:
+        "200":
+          description: Current market snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Market"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/markets/{marketId}/record:
+    get:
+      tags: [Records]
+      operationId: getMarketRecord
+      summary: Get a market record
+      description: |
+        Returns commands, events, commitments, snapshots, and integrity metadata.
+        Access is limited to the creator principal or the actor that created the
+        market. Open sealed-auction bid requests are returned as {"sealed": true}.
+      parameters:
+        - $ref: "#/components/parameters/MarketId"
+      responses:
+        "200":
+          description: Complete authorized record view.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketRecord"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+components:
+  securitySchemes:
+    AmbientActor:
+      type: apiKey
+      in: header
+      name: X-Ambient-Actor
+      description: Provisioned actor identifier.
+    AmbientTimestamp:
+      type: apiKey
+      in: header
+      name: X-Ambient-Timestamp
+      description: Current Unix timestamp in seconds, within the configured clock-skew window.
+    AmbientSignature:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: |
+        Ambient-HMAC followed by a space and the unpadded base64url HMAC-SHA256
+        signature. See Authentication and authority for the canonical input.
+
+  parameters:
+    MarketId:
+      name: marketId
+      in: path
+      required: true
+      description: Client-selected market identifier.
+      schema:
+        type: string
+        minLength: 1
+      example: table-2026-09-19-1900
+    CommitmentId:
+      name: commitmentId
+      in: path
+      required: true
+      description: Commitment identifier returned by an allocation action.
+      schema:
+        type: string
+        minLength: 1
+
+  responses:
+    BadRequest:
+      description: The JSON or command fields are invalid.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: HMAC authentication failed.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: unauthenticated
+              message: request authentication failed
+    Forbidden:
+      description: The actor or principal is not authorized for this action.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: The requested market, commitment, or route was not found.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: The command conflicts with current state, version, capacity, or idempotency history.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    UnprocessableEntity:
+      description: The mechanism preset is unknown or its configuration is invalid.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    MethodNotAllowed:
+      description: The route does not support this method.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InternalError:
+      description: The command could not be completed because of an internal failure.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          const: ok
+
+    CreateMarketRequest:
+      type: object
+      additionalProperties: false
+      required: [commandId, marketId, principalId, subject, mechanism]
+      properties:
+        commandId:
+          $ref: "#/components/schemas/CommandId"
+        marketId:
+          type: string
+          minLength: 1
+          description: Client-selected unique market identifier.
+        principalId:
+          $ref: "#/components/schemas/PrincipalId"
+        authorityRef:
+          $ref: "#/components/schemas/AuthorityRef"
+        subject:
+          $ref: "#/components/schemas/Subject"
+        mechanism:
+          $ref: "#/components/schemas/MechanismSelection"
+
+    PublishMarketRequest:
+      type: object
+      additionalProperties: false
+      required: [commandId, expectedVersion, principalId]
+      properties:
+        commandId:
+          $ref: "#/components/schemas/CommandId"
+        expectedVersion:
+          type: integer
+          format: uint64
+          minimum: 1
+          description: Current draft version returned by Ambient.
+        principalId:
+          $ref: "#/components/schemas/PrincipalId"
+        authorityRef:
+          $ref: "#/components/schemas/AuthorityRef"
+
+    DirectClaimRequest:
+      type: object
+      additionalProperties: false
+      required: [commandId, principalId]
+      properties:
+        commandId:
+          $ref: "#/components/schemas/CommandId"
+        expectedVersion:
+          type: integer
+          format: uint64
+          minimum: 0
+          description: Optional optimistic version check. Omit or send 0 for server arrival order.
+        principalId:
+          $ref: "#/components/schemas/PrincipalId"
+        authorityRef:
+          $ref: "#/components/schemas/AuthorityRef"
+
+    SealedBidRequest:
+      type: object
+      additionalProperties: false
+      required: [commandId, principalId, amountMinor, currency]
+      properties:
+        commandId:
+          $ref: "#/components/schemas/CommandId"
+        principalId:
+          $ref: "#/components/schemas/PrincipalId"
+        authorityRef:
+          $ref: "#/components/schemas/AuthorityRef"
+        amountMinor:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Positive bid in minor currency units.
+        currency:
+          $ref: "#/components/schemas/Currency"
+
+    CommitmentActionRequest:
+      type: object
+      additionalProperties: false
+      required: [commandId, principalId]
+      properties:
+        commandId:
+          $ref: "#/components/schemas/CommandId"
+        principalId:
+          $ref: "#/components/schemas/PrincipalId"
+        authorityRef:
+          $ref: "#/components/schemas/AuthorityRef"
+
+    CommandId:
+      type: string
+      minLength: 1
+      description: Actor-scoped idempotency key. Retry the identical command with the same value.
+
+    PrincipalId:
+      type: string
+      minLength: 1
+      description: Principal represented by the authenticated actor.
+
+    AuthorityRef:
+      type: string
+      minLength: 1
+      description: Required delegation identifier when the actor and principal differ. Omit for self-action.
+
+    Currency:
+      type: string
+      pattern: "^[A-Z]{3}$"
+      description: Three-letter uppercase currency code.
+      example: USD
+
+    Subject:
+      type: object
+      additionalProperties: false
+      required: [schema, data]
+      properties:
+        schema:
+          type: string
+          minLength: 1
+          description: Versioned identifier chosen by the client for the subject data shape.
+          example: restaurant-table.v1
+        data:
+          type: object
+          description: Client-defined JSON object describing the item, service, capacity, or right being allocated.
+          additionalProperties: true
+          example:
+            partySize: 2
+            startsAt: "2026-09-19T19:00:00Z"
+
+    MechanismSelection:
+      description: Supported versioned allocation mechanism and its immutable configuration.
+      oneOf:
+        - $ref: "#/components/schemas/DirectClaimMechanism"
+        - $ref: "#/components/schemas/SealedAuctionMechanism"
+      discriminator:
+        propertyName: presetId
+        mapping:
+          direct-claim.v1: "#/components/schemas/DirectClaimMechanism"
+          sealed-forward-auction.v1: "#/components/schemas/SealedAuctionMechanism"
+
+    DirectClaimMechanism:
+      type: object
+      additionalProperties: false
+      required: [presetId, config]
+      properties:
+        presetId:
+          type: string
+          const: direct-claim.v1
+        config:
+          $ref: "#/components/schemas/DirectClaimConfig"
+
+    SealedAuctionMechanism:
+      type: object
+      additionalProperties: false
+      required: [presetId, config]
+      properties:
+        presetId:
+          type: string
+          const: sealed-forward-auction.v1
+        config:
+          $ref: "#/components/schemas/SealedAuctionConfig"
+
+    DirectClaimConfig:
+      description: Capacity, pricing, and confirmation rules for a direct-claim market.
+      oneOf:
+        - $ref: "#/components/schemas/DirectClaimImmediateConfig"
+        - $ref: "#/components/schemas/DirectClaimHeldConfig"
+      discriminator:
+        propertyName: confirmation
+        mapping:
+          none: "#/components/schemas/DirectClaimImmediateConfig"
+          creator: "#/components/schemas/DirectClaimHeldConfig"
+          participant: "#/components/schemas/DirectClaimHeldConfig"
+          both: "#/components/schemas/DirectClaimHeldConfig"
+
+    DirectClaimImmediateConfig:
+      type: object
+      additionalProperties: false
+      required: [capacity, pricing, confirmation]
+      properties:
+        capacity:
+          type: integer
+          format: uint32
+          minimum: 1
+          description: Number of successful commitments the market can allocate.
+        pricing:
+          $ref: "#/components/schemas/DirectClaimPricing"
+        confirmation:
+          type: string
+          const: none
+        holdDurationSeconds:
+          type: integer
+          format: uint32
+          maximum: 0
+          description: May be omitted. An explicit value must be 0 and is removed during normalization.
+
+    DirectClaimHeldConfig:
+      type: object
+      additionalProperties: false
+      required: [capacity, pricing, confirmation, holdDurationSeconds]
+      properties:
+        capacity:
+          type: integer
+          format: uint32
+          minimum: 1
+          description: Number of successful commitments the market can allocate.
+        pricing:
+          $ref: "#/components/schemas/DirectClaimPricing"
+        confirmation:
+          type: string
+          enum: [creator, participant, both]
+          description: Principals that must confirm before the commitment is final.
+        holdDurationSeconds:
+          type: integer
+          format: uint32
+          minimum: 1
+          description: Confirmation period before the commitment expires.
+
+    DirectClaimPricing:
+      description: Free or posted terms recorded in the resulting commitment.
+      oneOf:
+        - $ref: "#/components/schemas/FreePricing"
+        - $ref: "#/components/schemas/PostedPricing"
+      discriminator:
+        propertyName: mode
+        mapping:
+          free: "#/components/schemas/FreePricing"
+          posted: "#/components/schemas/PostedPricing"
+
+    FreePricing:
+      type: object
+      additionalProperties: false
+      required: [mode]
+      properties:
+        mode:
+          type: string
+          const: free
+
+    PostedPricing:
+      type: object
+      additionalProperties: false
+      required: [mode, amountMinor, currency]
+      properties:
+        mode:
+          type: string
+          const: posted
+        amountMinor:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Positive posted amount in minor currency units.
+        currency:
+          $ref: "#/components/schemas/Currency"
+
+    SealedAuctionConfig:
+      type: object
+      additionalProperties: false
+      required: [currency, closesAt, holdDurationSeconds]
+      properties:
+        currency:
+          $ref: "#/components/schemas/Currency"
+        reserveAmountMinor:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Optional positive reserve in minor currency units.
+        closesAt:
+          type: string
+          format: date-time
+          description: Fixed auction close. It must still be in the future when the draft is published.
+        holdDurationSeconds:
+          type: integer
+          format: uint32
+          minimum: 1
+          description: Winner confirmation period after resolution.
+
+    CommandIdentity:
+      type: object
+      additionalProperties: false
+      required: [principalId, actorId]
+      properties:
+        principalId:
+          type: string
+          minLength: 1
+          description: Principal whose rights or obligations are affected.
+        actorId:
+          type: string
+          minLength: 1
+          description: Authenticated actor that submitted the command.
+        authorityRef:
+          type: string
+          minLength: 1
+          description: Delegation used when actorId and principalId differ.
+
+    Market:
+      type: object
+      additionalProperties: false
+      required: [id, version, state, creator, subject, mechanism, mechanismState, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          minLength: 1
+        version:
+          type: integer
+          format: uint64
+          minimum: 1
+          description: Monotonically increasing version used for optimistic concurrency.
+        state:
+          type: string
+          enum: [draft, open, closed]
+        creator:
+          $ref: "#/components/schemas/CommandIdentity"
+        subject:
+          $ref: "#/components/schemas/Subject"
+        mechanism:
+          $ref: "#/components/schemas/MechanismSelection"
+        mechanismState:
+          description: Public state owned by the selected mechanism.
+          oneOf:
+            - $ref: "#/components/schemas/DirectClaimState"
+            - $ref: "#/components/schemas/SealedAuctionState"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    DirectClaimState:
+      type: object
+      additionalProperties: false
+      required: [allocated]
+      properties:
+        allocated:
+          type: integer
+          format: uint32
+          minimum: 0
+          description: Capacity currently held or committed.
+
+    SealedAuctionState:
+      type: object
+      additionalProperties: false
+      required: [bidCount]
+      properties:
+        bidCount:
+          type: integer
+          format: uint32
+          minimum: 0
+          description: Number of accepted bids. Bid contents remain private.
+        resolution:
+          type: string
+          enum: [winner_selected, no_trade]
+        winningBidId:
+          type: string
+          minLength: 1
+        excludedBidIds:
+          type: array
+          description: Bids excluded after a winner declines or expires.
+          items:
+            type: string
+            minLength: 1
+
+    MarketResult:
+      type: object
+      additionalProperties: false
+      required: [market, events]
+      properties:
+        market:
+          $ref: "#/components/schemas/Market"
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/Event"
+
+    MarketActionResult:
+      type: object
+      additionalProperties: false
+      required: [market, commitments, events]
+      properties:
+        market:
+          $ref: "#/components/schemas/Market"
+        commitments:
+          type: array
+          description: Commitments created or changed by the command.
+          items:
+            $ref: "#/components/schemas/Commitment"
+        bidReceipts:
+          type: array
+          description: Amount-free receipts returned after accepted sealed bids.
+          items:
+            $ref: "#/components/schemas/SealedBidReceipt"
+        auctionResolution:
+          $ref: "#/components/schemas/SealedAuctionResolution"
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/Event"
+
+    Commitment:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - version
+        - marketId
+        - marketVersion
+        - creatorPrincipalId
+        - participantPrincipalId
+        - state
+        - terms
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          minLength: 1
+        version:
+          type: integer
+          format: uint64
+          minimum: 1
+        marketId:
+          type: string
+          minLength: 1
+        marketVersion:
+          type: integer
+          format: uint64
+          minimum: 1
+        creatorPrincipalId:
+          type: string
+          minLength: 1
+        participantPrincipalId:
+          type: string
+          minLength: 1
+        state:
+          type: string
+          enum: [provisional, awaiting_confirmations, committed, declined, expired, failed]
+        terms:
+          description: Immutable terms generated by the market mechanism.
+          oneOf:
+            - $ref: "#/components/schemas/DirectClaimCommitmentTerms"
+            - $ref: "#/components/schemas/SealedAuctionCommitmentTerms"
+        requiredConfirmationPrincipalIds:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        confirmedPrincipalIds:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        expiresAt:
+          type: string
+          format: date-time
+          description: Confirmation deadline when the commitment is awaiting confirmation.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    DirectClaimCommitmentTerms:
+      type: object
+      additionalProperties: false
+      required: [subject, pricing]
+      properties:
+        subject:
+          $ref: "#/components/schemas/Subject"
+        pricing:
+          $ref: "#/components/schemas/DirectClaimPricing"
+
+    SealedAuctionCommitmentTerms:
+      type: object
+      additionalProperties: false
+      required: [subject, winningBidId, pricing]
+      properties:
+        subject:
+          $ref: "#/components/schemas/Subject"
+        winningBidId:
+          type: string
+          minLength: 1
+        pricing:
+          $ref: "#/components/schemas/SealedAuctionClearingPrice"
+
+    SealedBidReceipt:
+      type: object
+      additionalProperties: false
+      required: [bidId, marketId, marketVersion, state, submittedAt]
+      properties:
+        bidId:
+          type: string
+          minLength: 1
+        marketId:
+          type: string
+          minLength: 1
+        marketVersion:
+          type: integer
+          format: uint64
+          minimum: 1
+        state:
+          type: string
+          const: active
+        submittedAt:
+          type: string
+          format: date-time
+
+    SealedAuctionResolution:
+      description: Public result produced at close or after deterministic winner promotion.
+      oneOf:
+        - $ref: "#/components/schemas/NoTradeResolution"
+        - $ref: "#/components/schemas/WinnerSelectedResolution"
+      discriminator:
+        propertyName: outcome
+        mapping:
+          no_trade: "#/components/schemas/NoTradeResolution"
+          winner_selected: "#/components/schemas/WinnerSelectedResolution"
+
+    NoTradeResolution:
+      type: object
+      additionalProperties: false
+      required: [outcome]
+      properties:
+        outcome:
+          type: string
+          const: no_trade
+
+    WinnerSelectedResolution:
+      type: object
+      additionalProperties: false
+      required: [outcome, winningBidId, winnerPrincipalId, clearingPrice]
+      properties:
+        outcome:
+          type: string
+          const: winner_selected
+        winningBidId:
+          type: string
+          minLength: 1
+        winnerPrincipalId:
+          type: string
+          minLength: 1
+        clearingPrice:
+          $ref: "#/components/schemas/SealedAuctionClearingPrice"
+
+    SealedAuctionClearingPrice:
+      type: object
+      additionalProperties: false
+      required: [rule, amountMinor, currency]
+      properties:
+        rule:
+          type: string
+          const: second_price
+        amountMinor:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Second-highest eligible bid or the reserve when higher. Zero is possible without a reserve and one bidder.
+        currency:
+          $ref: "#/components/schemas/Currency"
+
+    Event:
+      type: object
+      additionalProperties: false
+      required: [id, type, marketId, marketVersion, commandId, principalId, actorId, occurredAt, data]
+      properties:
+        sequence:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Durable order in a market record. Immediate command results may omit it.
+        id:
+          type: string
+          minLength: 1
+        type:
+          type: string
+          enum:
+            - market.draft_created
+            - market.published
+            - direct_claim.accepted
+            - sealed_auction.bid_submitted
+            - sealed_auction.resolved
+            - commitment.provisional
+            - commitment.awaiting_confirmations
+            - commitment.committed
+            - commitment.confirmation_recorded
+            - commitment.declined
+            - commitment.expired
+        marketId:
+          type: string
+          minLength: 1
+        marketVersion:
+          type: integer
+          format: uint64
+          minimum: 1
+        commandId:
+          type: string
+          minLength: 1
+        principalId:
+          type: string
+          minLength: 1
+        actorId:
+          type: string
+          minLength: 1
+        authorityRef:
+          type: string
+          minLength: 1
+        occurredAt:
+          type: string
+          format: date-time
+        data:
+          description: Payload selected by event type.
+          oneOf:
+            - $ref: "#/components/schemas/MarketDraftCreatedEventData"
+            - $ref: "#/components/schemas/MarketPublishedEventData"
+            - $ref: "#/components/schemas/DirectClaimAcceptedEventData"
+            - $ref: "#/components/schemas/SealedBidSubmittedEventData"
+            - $ref: "#/components/schemas/SealedAuctionResolution"
+            - $ref: "#/components/schemas/CommitmentStateChangedEventData"
+
+    MarketDraftCreatedEventData:
+      type: object
+      additionalProperties: false
+      required: [creator, subject, mechanism, mechanismState]
+      properties:
+        creator:
+          $ref: "#/components/schemas/CommandIdentity"
+        subject:
+          $ref: "#/components/schemas/Subject"
+        mechanism:
+          $ref: "#/components/schemas/MechanismSelection"
+        mechanismState:
+          oneOf:
+            - $ref: "#/components/schemas/DirectClaimState"
+            - $ref: "#/components/schemas/SealedAuctionState"
+
+    MarketPublishedEventData:
+      type: object
+      additionalProperties: false
+      required: [previousState, state]
+      properties:
+        previousState:
+          type: string
+          const: draft
+        state:
+          type: string
+          const: open
+
+    DirectClaimAcceptedEventData:
+      type: object
+      additionalProperties: false
+      required: [commitmentId, allocated, capacity]
+      properties:
+        commitmentId:
+          type: string
+          minLength: 1
+        allocated:
+          type: integer
+          format: uint32
+          minimum: 1
+        capacity:
+          type: integer
+          format: uint32
+          minimum: 1
+
+    SealedBidSubmittedEventData:
+      type: object
+      additionalProperties: false
+      required: [bidId, bidCount]
+      properties:
+        bidId:
+          type: string
+          minLength: 1
+        bidCount:
+          type: integer
+          format: uint32
+          minimum: 1
+
+    CommitmentStateChangedEventData:
+      type: object
+      additionalProperties: false
+      required: [commitmentId, state]
+      properties:
+        commitmentId:
+          type: string
+          minLength: 1
+        state:
+          type: string
+          enum: [provisional, awaiting_confirmations, committed, declined, expired, failed]
+        requiredConfirmationPrincipalIds:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        confirmedPrincipalIds:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        expiresAt:
+          type: string
+          format: date-time
+
+    MarketRecord:
+      type: object
+      additionalProperties: false
+      required: [market, commands, commitments, events, integrity]
+      properties:
+        market:
+          $ref: "#/components/schemas/Market"
+        commands:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecordedCommand"
+        commitments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Commitment"
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/Event"
+        integrity:
+          $ref: "#/components/schemas/MarketRecordIntegrity"
+
+    RecordedCommand:
+      type: object
+      additionalProperties: false
+      required: [sequence, id, type, marketId, identity, request, status, occurredAt, recordedAt]
+      properties:
+        sequence:
+          type: integer
+          format: int64
+          minimum: 1
+        id:
+          type: string
+          minLength: 1
+        type:
+          type: string
+          enum:
+            - market.create_draft
+            - market.publish
+            - direct_claim.submit
+            - sealed_auction.submit_bid
+            - sealed_auction.resolve
+            - commitment.confirm
+            - commitment.decline
+            - commitment.expire
+        marketId:
+          type: string
+          description: Empty only when a rejected command could not be associated with a market.
+        identity:
+          $ref: "#/components/schemas/CommandIdentity"
+        request:
+          type: object
+          additionalProperties: true
+          description: |
+            Recorded application command, including server-assigned identity and
+            time. An open sealed bid is redacted to {"sealed": true}.
+        status:
+          type: string
+          enum: [accepted, rejected]
+        rejectionCode:
+          $ref: "#/components/schemas/ErrorCode"
+        occurredAt:
+          type: string
+          format: date-time
+        recordedAt:
+          type: string
+          format: date-time
+
+    MarketRecordIntegrity:
+      type: object
+      additionalProperties: false
+      required: [algorithm, recordHash, stateReconstructed]
+      properties:
+        algorithm:
+          type: string
+          const: sha256-canonical-json-v1
+        recordHash:
+          type: string
+          pattern: "^sha256:[0-9a-f]{64}$"
+          description: Unsigned content hash of the exact returned record view.
+        stateReconstructed:
+          type: boolean
+          description: True when the current verifier independently reproduced stored snapshots from events.
+
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message]
+          properties:
+            code:
+              $ref: "#/components/schemas/ErrorCode"
+            message:
+              type: string
+              description: Human-readable detail. Clients should branch on code.
+
+    ErrorCode:
+      type: string
+      enum:
+        - invalid_request
+        - unauthenticated
+        - forbidden
+        - not_found
+        - method_not_allowed
+        - idempotency_conflict
+        - concurrent_update
+        - internal_error
+        - invalid_command
+        - authority_reference_required
+        - unknown_mechanism
+        - invalid_mechanism_config
+        - market_not_found
+        - commitment_not_found
+        - principal_not_authorized
+        - version_conflict
+        - invalid_market_transition
+        - invalid_commitment_transition
+        - actor_not_authorized
+        - capacity_exhausted
