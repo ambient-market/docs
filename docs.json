@@ -26,7 +26,7 @@
             "group": "HTTP endpoints",
             "openapi": "openapi.yaml"
           },
-          "mcp"
+          "mcp-tools"
         ]
       }
     ]

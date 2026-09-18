@@ -1,5 +1,5 @@
 ---
-title: "MCP reference"
+title: "MCP tools"
 description: "Connect to Ambient through MCP and use the implemented market tools."
 ---
 

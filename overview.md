@@ -30,7 +30,7 @@ before participants can act.
 
 Follow the [quickstart](/quickstart) for complete request bodies and a full
 create, publish, claim, and confirmation flow. See the [HTTP API](/http-api)
-or [MCP reference](/mcp) for exact inputs.
+or [MCP tools](/mcp-tools) for exact inputs.
 
 ## What is implemented
 
