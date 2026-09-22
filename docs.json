@@ -3,6 +3,7 @@
   "theme": "mint",
   "name": "Ambient",
   "description": "Build and participate in deterministic markets through HTTP and MCP.",
+  "favicon": "/favicon.svg",
   "colors": {
     "primary": "#004D3E",
     "light": "#004D3E",

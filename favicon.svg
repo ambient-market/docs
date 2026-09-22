@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <style>
+    .field {
+      fill: #004d3e;
+      stroke: #004d3e;
+    }
+
+    .runtime {
+      fill: #7de0b0;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .field {
+        fill: #7de0b0;
+        stroke: #7de0b0;
+      }
+
+      .runtime {
+        fill: #ffffff;
+      }
+    }
+  </style>
+  <path class="field" d="m9 18 23 14L18 52l14-20 23 14M32 32 51 9M32 32 8 42" fill="none" stroke-width="2.4" stroke-linecap="square" stroke-linejoin="miter" />
+  <circle class="field" cx="8" cy="17" r="3.5" stroke="none" />
+  <circle class="field" cx="17" cy="53" r="3.5" stroke="none" />
+  <circle class="field" cx="56" cy="47" r="3.5" stroke="none" />
+  <circle class="field" cx="52" cy="8" r="3.5" stroke="none" />
+  <circle class="field" cx="7" cy="43" r="3.5" stroke="none" />
+  <rect class="runtime" x="27" y="27" width="10" height="10" />
+</svg>
