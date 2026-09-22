@@ -4,9 +4,9 @@
   "name": "Ambient",
   "description": "Build and participate in deterministic markets through HTTP and MCP.",
   "colors": {
-    "primary": "#0F766E",
-    "light": "#0D9488",
-    "dark": "#2DD4BF"
+    "primary": "#004D3E",
+    "light": "#004D3E",
+    "dark": "#7DE0B0"
   },
   "navigation": {
     "groups": [
