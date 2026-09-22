@@ -3,7 +3,10 @@ info:
   title: Ambient HTTP API
   version: 0.1.0
   description: |
-    Create and operate deterministic markets through signed HTTP commands.
+    Create and operate deterministic markets through authenticated HTTP
+    commands. The first launch supports unfunded markets across direct claim,
+    sealed forward auction, and request for offers. Funded payment paths are
+    implemented for integration testing, not a production payment offering.
 
     Request bodies use strict JSON. Unknown fields and multiple JSON values are
     rejected. The maximum request body size is 1 MiB. Ambient assigns command
@@ -22,15 +25,19 @@ security:
   - AmbientBearer: []
 tags:
   - name: Authentication
-    description: Prove control of a registered actor key and obtain a short-lived bearer token.
+    description: Prove control of an actor key or human email and obtain a short-lived bearer token.
+  - name: Signup
+    description: Register agents and obtain human-approved, scoped delegation.
   - name: Administration
-    description: Trusted operator commands that are not public self-service APIs.
+    description: Trusted identity and credential commands that are not public self-service APIs.
   - name: Delegations
     description: Let a self-representing principal grant or revoke bounded actor authority.
+  - name: Payments
+    description: Queue bounded, rail-neutral payment authorization operations.
   - name: Markets
     description: Create, publish, and read markets.
   - name: Participation
-    description: Submit claims and sealed bids to open markets.
+    description: Submit claims, bids, and private offers to open markets.
   - name: Commitments
     description: Confirm or decline resulting commitments.
   - name: Records
@@ -111,6 +118,136 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /v1/signup/agent-challenges:
+    post:
+      tags: [Signup]
+      operationId: beginAgentSignup
+      summary: Start agent self-registration with a new Ed25519 key
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [publicKey]
+              properties:
+                publicKey: {type: string, description: Unpadded base64url Ed25519 public key.}
+      responses:
+        "201":
+          description: Challenge with proposed principal and key IDs and base64url signingPayload.
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "429": { description: Shared agent signup attempt limit reached. }
+
+  /v1/signup/agents:
+    post:
+      tags: [Signup]
+      operationId: completeAgentSignup
+      summary: Prove key possession and create a self-representing identity
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [challengeId, signature]
+              properties:
+                challengeId: {type: string}
+                signature: {type: string, description: Unpadded base64url Ed25519 signature over decoded signingPayload.}
+      responses:
+        "201": { description: Returns principalId, actorId, and keyId. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { description: Shared agent signup completion limit reached. }
+
+  /v1/signup/email-challenges:
+    post:
+      tags: [Signup]
+      operationId: beginHumanEmailLogin
+      summary: Send a human-only signup or login code
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email]
+              properties:
+                email: {type: string, format: email}
+      responses:
+        "202": { description: Returns challenge ID and expiry; the code is sent by email. }
+        "429": { description: Email challenge rate limit reached. }
+
+  /v1/signup/email-tokens:
+    post:
+      tags: [Signup]
+      operationId: completeHumanEmailLogin
+      summary: Exchange a login-purpose code for a human bearer token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [challengeId, code]
+              properties:
+                challengeId: {type: string}
+                code: {type: string, pattern: '^[0-9]{8}$'}
+      responses:
+        "201": { description: Returns a short-lived bearer token for the human control actor. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/signup/delegation-requests:
+    post:
+      tags: [Signup]
+      operationId: requestEmailDelegation
+      summary: Ask a person to approve this agent's bounded authority
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email, scopes, validUntil]
+              properties:
+                email: {type: string, format: email}
+                scopes:
+                  type: array
+                  items: { $ref: "#/components/schemas/AuthorityScope" }
+                paymentMandate: { $ref: "#/components/schemas/PaymentMandate" }
+                validUntil: {type: string, format: date-time}
+      responses:
+        "202": { description: Returns challenge ID, delegation ID, and expiry; the action-bound code is sent to the person. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { description: Email challenge rate limit reached. }
+
+  /v1/signup/delegation-approvals:
+    post:
+      tags: [Signup]
+      operationId: approveEmailDelegation
+      summary: Exchange the person's delegation code for the requested grant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [challengeId, code]
+              properties:
+                challengeId: {type: string}
+                code: {type: string, pattern: '^[0-9]{8}$'}
+      responses:
+        "201": { description: Returns principalId and delegationId, never a human login token. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
   /v1/admin/identities:
     post:
       tags: [Administration]
@@ -121,7 +258,8 @@ paths:
         public-key authentication. The authenticated actor must be explicitly
         listed in AMBIENT_OPERATOR_ACTORS. This is trusted provisioning, not a
         public registration endpoint. Creating distinct principal and actor IDs
-        does not grant authority between them.
+        does not grant authority between them. Once an actor has its initial
+        key, another provisioning command cannot attach a second key.
       requestBody:
         required: true
         content:
@@ -141,6 +279,104 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/admin/credentials:
+    post:
+      tags: [Administration]
+      operationId: issueCredential
+      summary: Issue an Ed25519-signed Ambient credential
+      description: |
+        Creates an `ambient-credential.v1` envelope for an existing subject
+        principal. The authenticated actor must equal the issuing actor in
+        `AMBIENT_CREDENTIAL_ISSUER`. Ambient controls issuer identity, signing
+        key, and issue time; verifies the resulting proof against the registered
+        public key; and atomically records the credential and command decision.
+        This is not yet a portable W3C Verifiable Credential.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IssueCredentialRequest"
+      responses:
+        "201":
+          description: Credential signed and stored, or an identical command replayed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Credential"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/admin/credentials/{credentialId}:
+    get:
+      tags: [Administration]
+      operationId: getCredential
+      summary: Read authoritative credential status
+      description: Restricted to the configured issuing actor.
+      parameters:
+        - $ref: "#/components/parameters/CredentialId"
+      responses:
+        "200":
+          description: Signed credential and current registry status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Credential"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/admin/credentials/{credentialId}/revoke:
+    post:
+      tags: [Administration]
+      operationId: revokeCredential
+      summary: Revoke an Ambient credential
+      description: |
+        Irrevocably records issuer-controlled revocation status without changing
+        the immutable signed issuance payload. Exact retries return the original result.
+      parameters:
+        - $ref: "#/components/parameters/CredentialId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RevokeCredentialRequest"
+      responses:
+        "200":
+          description: Credential revoked or an identical command replayed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Credential"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
         "500":
@@ -215,7 +451,184 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /v1/payee-rails:
+    post:
+      tags: [Payments]
+      operationId: registerPayeeRail
+      summary: Self-service payee registration (new bindings temporarily blocked)
+      description: |
+        New self-service bindings are temporarily rejected with
+        `payee_rail_onboarding_required` until principal-bound Connect
+        onboarding can establish account ownership. Existing identical
+        commands may replay. The private adapter reference is never returned.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterPayeeRailRequest"
+      responses:
+        "201":
+          description: An existing identical self-service command replayed; new bindings are currently rejected.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayeeRailRegistration"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/admin/payee-rails:
+    post:
+      tags: [Administration]
+      operationId: registerPayeeRailAsOperator
+      summary: Register a payee rail through the bootstrap operator
+      description: |
+        Controlled bootstrap path for an actor listed in
+        AMBIENT_OPERATOR_ACTORS. This is the current path for new payee rail
+        bindings while self-service registration is blocked.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminRegisterPayeeRailRequest"
+      responses:
+        "201":
+          description: Payee rail registration created or an identical command replayed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayeeRailRegistration"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/payment-authorizations:
+    post:
+      tags: [Payments]
+      operationId: authorizePayment
+      summary: Queue a payment authorization
+      description: |
+        Queues asynchronous authorization through a configured rail. A
+        self-representing principal may authorize directly. A different actor
+        must cite an active delegation with `payment:authorize` scope and a
+        mandate covering the rail, currency, per-authorization amount, optional
+        payee/market restrictions, and requested expiry.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QueuePaymentAuthorizationRequest"
+      responses:
+        "202":
+          description: Authorization operation queued or an identical command replayed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentOperation"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/payment-operations/{commandId}:
+    get:
+      tags: [Payments]
+      operationId: getPaymentOperation
+      summary: Read an actor-scoped payment operation
+      description: |
+        Returns the safe status projection for a payment command queued by the
+        authenticated actor. Operations owned by another actor are
+        indistinguishable from missing operations. Raw requests and results,
+        provider errors, rail references, lease state, and journal entries are
+        not disclosed. A succeeded operation's authorizationState is read from
+        the independently verified authorization record.
+      parameters:
+        - $ref: "#/components/parameters/PaymentCommandId"
+      responses:
+        "200":
+          description: Safe payment-operation status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentOperationView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /v1/markets:
+    get:
+      tags: [Markets]
+      operationId: listMarkets
+      summary: Discover published markets
+      description: |
+        Returns public projections of published markets. Drafts are never
+        included. Results are ordered by updatedAt and market ID, both
+        descending. No authentication is required.
+      security: []
+      parameters:
+        - name: cursor
+          in: query
+          description: Opaque cursor returned as nextCursor by the previous page.
+          schema:
+            type: string
+            minLength: 1
+        - name: limit
+          in: query
+          description: Maximum number of markets to return. Defaults to 50.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        "200":
+          description: Public published-market page.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketListPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
     post:
       tags: [Markets]
       operationId: createMarket
@@ -297,6 +710,8 @@ paths:
       description: |
         Opens a reviewed draft to participant actions. Only the creator principal
         can publish it. A sealed auction must be published before its closesAt time.
+        If a deployment admission rule matches the subject schema, credentialId
+        must identify an active trusted credential for the creator principal.
       parameters:
         - $ref: "#/components/parameters/MarketId"
       requestBody:
@@ -309,6 +724,7 @@ paths:
               commandId: table-publish-1
               expectedVersion: 1
               principalId: restaurant-1
+              credentialId: restaurant-operator-credential-1
       responses:
         "200":
           description: Market published.
@@ -410,6 +826,135 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /v1/markets/{marketId}/offers:
+    get:
+      tags: [Participation]
+      operationId: getRequestForOffers
+      summary: Read offers visible to the currently authorized principal
+      description: |
+        The requester principal sees all private offers with current
+        market:offer_select authority. A provider principal sees only its own
+        with current market:offer_submit authority. Other authenticated
+        principals see only the public market snapshot. Delegated agents must
+        supply principalId and authorityRef; revoked grants cannot read.
+        Drafts and non-RFO markets return not found.
+      parameters:
+        - $ref: "#/components/parameters/MarketId"
+        - $ref: "#/components/parameters/ReadPrincipalId"
+        - $ref: "#/components/parameters/ReadAuthorityRef"
+      responses:
+        "200":
+          description: Public RFO state plus scoped private offers.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestForOffersView"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags: [Participation]
+      operationId: submitOffer
+      summary: Submit a private offer
+      parameters:
+        - $ref: "#/components/parameters/MarketId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitOfferRequest"
+      responses:
+        "200":
+          description: Offer receipt without its private terms.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketActionResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/markets/{marketId}/offer-withdrawals:
+    post:
+      tags: [Participation]
+      operationId: withdrawOffer
+      summary: Withdraw your own active offer before close
+      parameters:
+        - $ref: "#/components/parameters/MarketId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WithdrawOfferRequest"
+      responses:
+        "200":
+          description: Offer withdrawn.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketActionResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/markets/{marketId}/offer-selections:
+    post:
+      tags: [Participation]
+      operationId: selectOffers
+      summary: Select offers as the requester after close
+      parameters:
+        - $ref: "#/components/parameters/MarketId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SelectOffersRequest"
+      responses:
+        "200":
+          description: Selection resolved into commitments.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketActionResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /v1/commitments/{commitmentId}/confirm:
     post:
       tags: [Commitments]
@@ -488,12 +1033,60 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /v1/commitments/{commitmentId}/refund:
+    post:
+      tags: [Commitments]
+      operationId: refundCommitment
+      summary: Refund a settled commitment
+      description: |
+        Queues a full refund through the commitment's payment rail. The named
+        principal must be the market creator; a delegated actor must cite
+        `commitment:refund` authority. Refund does not undo the committed
+        agreement or reopen market capacity. A terminally failed refund may be
+        retried with a new command ID; the new payment operation and the prior
+        failed attempt both remain in the record.
+      parameters:
+        - $ref: "#/components/parameters/CommitmentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommitmentActionRequest"
+            example:
+              commandId: table-refund-1
+              principalId: restaurant-1
+      responses:
+        "200":
+          description: Full refund queued or an identical command replayed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketActionResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /v1/markets/{marketId}:
     get:
       tags: [Markets]
       operationId: getMarket
-      summary: Get a market
-      description: Returns the current market snapshot to any authenticated actor.
+      summary: Get a published market
+      description: |
+        Returns the safe public projection of a published market. Creating
+        actors, authority references, private bid and offer identifiers,
+        credential identifiers, commands, and payments are omitted. Drafts
+        are indistinguishable from missing markets. No authentication is required.
+      security: []
       parameters:
         - $ref: "#/components/parameters/MarketId"
       responses:
@@ -502,9 +1095,32 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Market"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
+                $ref: "#/components/schemas/PublicMarket"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/markets/{marketId}/activity:
+    get:
+      tags: [Markets]
+      operationId: getMarketActivity
+      summary: Get public market activity
+      description: |
+        Returns a safe event projection for a published market. It includes
+        lifecycle types, times, public counts, states, outcomes, and clearing
+        prices where applicable. It omits identities, command bodies, bid and
+        offer identifiers, commitments, and payment references.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/MarketId"
+      responses:
+        "200":
+          description: Public market activity in recorded order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicMarketActivity"
         "404":
           $ref: "#/components/responses/NotFound"
         "500":
@@ -517,10 +1133,14 @@ paths:
       summary: Get a market record
       description: |
         Returns commands, events, commitments, snapshots, and integrity metadata.
-        Access is limited to the creator principal or the actor that created the
-        market. Open sealed-auction bid requests are returned as {"sealed": true}.
+        Access is limited to the creator principal or the original creating
+        actor with current market:create delegation. Delegated agents must
+        supply principalId and authorityRef. Open sealed-auction bid requests
+        are returned as {"sealed": true}.
       parameters:
         - $ref: "#/components/parameters/MarketId"
+        - $ref: "#/components/parameters/ReadPrincipalId"
+        - $ref: "#/components/parameters/ReadAuthorityRef"
       responses:
         "200":
           description: Complete authorized record view.
@@ -528,6 +1148,38 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MarketRecord"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/markets/{marketId}/my-outcome:
+    get:
+      tags: [Markets]
+      operationId: getMyMarketOutcome
+      summary: Get your outcome in a market
+      description: |
+        Returns the public market snapshot and only the represented principal's
+        accepted bid receipts, current offer states, and commitments. Private
+        offer terms are omitted. Use a commitment ID here
+        to confirm an allocation. An empty commitment list is not necessarily
+        a final loss while promotion remains possible. Requires current claim,
+        bid, or offer-submission authority for the market's mechanism.
+      parameters:
+        - $ref: "#/components/parameters/MarketId"
+        - $ref: "#/components/parameters/ReadPrincipalId"
+        - $ref: "#/components/parameters/ReadAuthorityRef"
+      responses:
+        "200":
+          description: Principal-scoped participation and commitments.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ParticipantMarketOutcome"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -562,6 +1214,22 @@ components:
       description: Short-lived opaque token issued after Ed25519 actor-key proof.
 
   parameters:
+    ReadPrincipalId:
+      name: principalId
+      in: query
+      required: false
+      description: Principal represented for a private read; omit for self-representation.
+      schema:
+        type: string
+        minLength: 1
+    ReadAuthorityRef:
+      name: authorityRef
+      in: query
+      required: false
+      description: Current delegation reference when reading for another principal.
+      schema:
+        type: string
+        minLength: 1
     MarketId:
       name: marketId
       in: path
@@ -584,6 +1252,22 @@ components:
       in: path
       required: true
       description: Client-selected delegation identifier.
+      schema:
+        type: string
+        minLength: 1
+    CredentialId:
+      name: credentialId
+      in: path
+      required: true
+      description: Ambient credential identifier.
+      schema:
+        type: string
+        minLength: 1
+    PaymentCommandId:
+      name: commandId
+      in: path
+      required: true
+      description: Actor-scoped payment command identifier returned when authorization was queued.
       schema:
         type: string
         minLength: 1
@@ -788,6 +1472,84 @@ components:
           type: string
           format: date-time
 
+    IssueCredentialRequest:
+      type: object
+      additionalProperties: false
+      required: [commandId, credentialId, subjectPrincipalId, type, claims]
+      properties:
+        commandId:
+          $ref: "#/components/schemas/CommandId"
+        credentialId:
+          type: string
+          minLength: 1
+        subjectPrincipalId:
+          $ref: "#/components/schemas/PrincipalId"
+        type:
+          type: string
+          minLength: 1
+        claims:
+          type: object
+          additionalProperties: true
+        validUntil:
+          type: string
+          format: date-time
+
+    RevokeCredentialRequest:
+      type: object
+      additionalProperties: false
+      required: [commandId]
+      properties:
+        commandId:
+          $ref: "#/components/schemas/CommandId"
+
+    Credential:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - issuerPrincipalId
+        - issuingActorId
+        - subjectPrincipalId
+        - type
+        - claims
+        - issuedAt
+        - signingKeyId
+        - payloadVersion
+        - signature
+      properties:
+        id:
+          type: string
+        issuerPrincipalId:
+          $ref: "#/components/schemas/PrincipalId"
+        issuingActorId:
+          type: string
+        authorityRef:
+          type: string
+        subjectPrincipalId:
+          $ref: "#/components/schemas/PrincipalId"
+        type:
+          type: string
+        claims:
+          type: object
+          additionalProperties: true
+        issuedAt:
+          type: string
+          format: date-time
+        validUntil:
+          type: string
+          format: date-time
+        revokedAt:
+          type: string
+          format: date-time
+        signingKeyId:
+          type: string
+        payloadVersion:
+          type: string
+          const: ambient-credential.v1
+        signature:
+          type: string
+          description: Unpadded base64url Ed25519 signature over the canonical Ambient credential payload.
+
     IssueDelegationRequest:
       type: object
       additionalProperties: false
@@ -809,6 +1571,9 @@ components:
           uniqueItems: true
           items:
             $ref: "#/components/schemas/AuthorityScope"
+        paymentMandate:
+          $ref: "#/components/schemas/PaymentMandate"
+          description: Required exactly when scopes includes payment:authorize.
         validUntil:
           type: string
           format: date-time
@@ -832,7 +1597,34 @@ components:
         - market:bid
         - commitment:confirm
         - commitment:decline
+        - commitment:refund
         - credential:issue
+        - payment:authorize
+        - payment:register_payee_rail
+
+    PaymentMandate:
+      type: object
+      additionalProperties: false
+      required: [railId, currency, maxAmountMinor]
+      description: |
+        Per-authorization bounds for delegated payment authority. This is not
+        an aggregate spending budget. The containing delegation supplies the
+        mandate expiry through validUntil.
+      properties:
+        railId:
+          type: string
+          minLength: 1
+        currency:
+          $ref: "#/components/schemas/Currency"
+        maxAmountMinor:
+          type: integer
+          format: int64
+          minimum: 1
+        payeePrincipalId:
+          $ref: "#/components/schemas/PrincipalId"
+        marketId:
+          type: string
+          minLength: 1
 
     Delegation:
       type: object
@@ -849,6 +1641,8 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AuthorityScope"
+        paymentMandate:
+          $ref: "#/components/schemas/PaymentMandate"
         validFrom:
           type: string
           format: date-time
@@ -856,6 +1650,259 @@ components:
           type: string
           format: date-time
         revokedAt:
+          type: string
+          format: date-time
+
+    RegisterPayeeRailRequest:
+      type: object
+      additionalProperties: false
+      required: [commandId, principalId, railId, credentialTarget, privateReference]
+      properties:
+        commandId:
+          $ref: "#/components/schemas/CommandId"
+        principalId:
+          $ref: "#/components/schemas/PrincipalId"
+        authorityRef:
+          $ref: "#/components/schemas/AuthorityRef"
+        railId:
+          type: string
+          minLength: 1
+        credentialTarget:
+          type: string
+          minLength: 1
+          description: Public target participants use when obtaining rail-specific authorization material.
+        privateReference:
+          type: string
+          minLength: 1
+          writeOnly: true
+          description: Private adapter routing reference. It is never returned to participants.
+
+    AdminRegisterPayeeRailRequest:
+      type: object
+      additionalProperties: false
+      required: [commandId, payeePrincipalId, railId, credentialTarget, privateReference]
+      properties:
+        commandId:
+          $ref: "#/components/schemas/CommandId"
+        payeePrincipalId:
+          $ref: "#/components/schemas/PrincipalId"
+        railId:
+          type: string
+          minLength: 1
+        credentialTarget:
+          type: string
+          minLength: 1
+        privateReference:
+          type: string
+          minLength: 1
+          writeOnly: true
+
+    PayeeRailRegistration:
+      type: object
+      additionalProperties: false
+      required: [payeePrincipalId, railId, credentialType, credentialTarget, createdAt]
+      properties:
+        payeePrincipalId:
+          $ref: "#/components/schemas/PrincipalId"
+        railId:
+          type: string
+        credentialType:
+          type: string
+        credentialTarget:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    QueuePaymentAuthorizationRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - commandId
+        - authorizationId
+        - railId
+        - principalId
+        - payeePrincipalId
+        - marketId
+        - amountMinor
+        - currency
+        - expiresAt
+      properties:
+        commandId:
+          $ref: "#/components/schemas/CommandId"
+        authorizationId:
+          type: string
+          minLength: 1
+        railId:
+          type: string
+          minLength: 1
+        principalId:
+          $ref: "#/components/schemas/PrincipalId"
+        authorityRef:
+          $ref: "#/components/schemas/AuthorityRef"
+        payeePrincipalId:
+          $ref: "#/components/schemas/PrincipalId"
+        marketId:
+          type: string
+          minLength: 1
+        amountMinor:
+          type: integer
+          format: int64
+          minimum: 1
+        currency:
+          $ref: "#/components/schemas/Currency"
+        expiresAt:
+          type: string
+          format: date-time
+        paymentCredential:
+          type: string
+          minLength: 1
+          writeOnly: true
+          description: Private one-time authorization material required by some rails.
+
+    PaymentOperation:
+      type: object
+      additionalProperties: false
+      required:
+        - commandId
+        - kind
+        - railId
+        - authorizationId
+        - identity
+        - request
+        - status
+        - attempts
+        - nextAttemptAt
+        - occurredAt
+        - recordedAt
+        - updatedAt
+      properties:
+        commandId:
+          $ref: "#/components/schemas/CommandId"
+        kind:
+          type: string
+          const: payment.authorize
+        railId:
+          type: string
+        authorizationId:
+          type: string
+        identity:
+          $ref: "#/components/schemas/CommandIdentity"
+        request:
+          type: object
+          additionalProperties: true
+        status:
+          type: string
+          enum: [pending, leased, succeeded, failed]
+        attempts:
+          type: integer
+          format: uint32
+        leaseUntil:
+          type: string
+          format: date-time
+        nextAttemptAt:
+          type: string
+          format: date-time
+        lastError:
+          type: string
+        rejectionCode:
+          type: string
+        result:
+          $ref: "#/components/schemas/PaymentAuthorization"
+        occurredAt:
+          type: string
+          format: date-time
+        recordedAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PaymentOperationView:
+      type: object
+      additionalProperties: false
+      required: [commandId, kind, railId, authorizationId, status, occurredAt, updatedAt]
+      properties:
+        commandId:
+          $ref: "#/components/schemas/CommandId"
+        kind:
+          type: string
+          enum: [payment.authorize, payment.settle, payment.cancel, payment.refund]
+        railId:
+          type: string
+        authorizationId:
+          type: string
+        status:
+          type: string
+          enum: [pending, leased, succeeded, failed]
+        authorizationState:
+          type: string
+          enum: [authorized, settled, canceled, refunded]
+        rejectionCode:
+          type: string
+          description: Stable Ambient rejection code. Provider error text is never returned.
+        occurredAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PaymentAuthorization:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - railId
+        - railReference
+        - payerPrincipalId
+        - payeePrincipalId
+        - marketId
+        - state
+        - authorizedAmountMinor
+        - settledAmountMinor
+        - refundedAmountMinor
+        - currency
+        - authorizationExpiresAt
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+        railId:
+          type: string
+        railReference:
+          type: string
+        payerPrincipalId:
+          $ref: "#/components/schemas/PrincipalId"
+        payeePrincipalId:
+          $ref: "#/components/schemas/PrincipalId"
+        marketId:
+          type: string
+        commitmentId:
+          type: string
+        state:
+          type: string
+          enum: [authorized, settled, canceled, refunded]
+        authorizedAmountMinor:
+          type: integer
+          format: int64
+        settledAmountMinor:
+          type: integer
+          format: int64
+        refundedAmountMinor:
+          type: integer
+          format: int64
+        currency:
+          $ref: "#/components/schemas/Currency"
+        authorizationExpiresAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
           type: string
           format: date-time
 
@@ -885,8 +1932,12 @@ components:
           $ref: "#/components/schemas/AuthorityRef"
         subject:
           $ref: "#/components/schemas/Subject"
+        fulfillment:
+          $ref: "#/components/schemas/FulfillmentSpec"
         mechanism:
           $ref: "#/components/schemas/MechanismSelection"
+        funding:
+          $ref: "#/components/schemas/FundingPolicy"
 
     PublishMarketRequest:
       type: object
@@ -900,6 +1951,10 @@ components:
           format: uint64
           minimum: 1
           description: Current draft version returned by Ambient.
+        credentialId:
+          type: string
+          minLength: 1
+          description: Credential presented when a configured publication-admission rule matches the subject schema.
         principalId:
           $ref: "#/components/schemas/PrincipalId"
         authorityRef:
@@ -921,6 +1976,12 @@ components:
           $ref: "#/components/schemas/PrincipalId"
         authorityRef:
           $ref: "#/components/schemas/AuthorityRef"
+        paymentAuthorizationId:
+          type: string
+          minLength: 1
+          description: Required when the market uses reserve_on_submission funding.
+        fulfillment:
+          $ref: "#/components/schemas/FulfillmentHandoff"
 
     SealedBidRequest:
       type: object
@@ -940,6 +2001,63 @@ components:
           description: Positive bid in minor currency units.
         currency:
           $ref: "#/components/schemas/Currency"
+        paymentAuthorizationId:
+          type: string
+          minLength: 1
+          description: Required when the market uses reserve_on_submission funding.
+
+    SubmitOfferRequest:
+      type: object
+      additionalProperties: false
+      required: [commandId, principalId, terms]
+      properties:
+        commandId:
+          $ref: "#/components/schemas/CommandId"
+        principalId:
+          $ref: "#/components/schemas/PrincipalId"
+        authorityRef:
+          $ref: "#/components/schemas/AuthorityRef"
+        terms:
+          $ref: "#/components/schemas/Subject"
+        amountMinor:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Fixed amount in the market currency when pricing permits or requires it.
+
+    WithdrawOfferRequest:
+      type: object
+      additionalProperties: false
+      required: [commandId, principalId, offerId]
+      properties:
+        commandId:
+          $ref: "#/components/schemas/CommandId"
+        principalId:
+          $ref: "#/components/schemas/PrincipalId"
+        authorityRef:
+          $ref: "#/components/schemas/AuthorityRef"
+        offerId:
+          type: string
+          minLength: 1
+
+    SelectOffersRequest:
+      type: object
+      additionalProperties: false
+      required: [commandId, principalId, offerIds]
+      properties:
+        commandId:
+          $ref: "#/components/schemas/CommandId"
+        principalId:
+          $ref: "#/components/schemas/PrincipalId"
+        authorityRef:
+          $ref: "#/components/schemas/AuthorityRef"
+        offerIds:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
 
     CommitmentActionRequest:
       type: object
@@ -992,16 +2110,103 @@ components:
             partySize: 2
             startsAt: "2026-09-19T19:00:00Z"
 
+    FulfillmentEndpoint:
+      type: object
+      additionalProperties: false
+      required: [transport, uri]
+      properties:
+        transport:
+          type: string
+          minLength: 1
+          description: Lowercase transport identifier such as email, https, or a2a.
+        uri:
+          type: string
+          format: uri
+          description: Absolute contact or delivery URI. It must not contain credentials, secrets, or a fragment.
+
+    FulfillmentSpec:
+      type: object
+      additionalProperties: false
+      required: [requestSchema, acceptedDeliveryTransports, outputMediaTypes]
+      properties:
+        requestSchema:
+          type: string
+          minLength: 1
+          description: Versioned schema required for participant requests.
+        acceptedDeliveryTransports:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+        providerEndpoint:
+          $ref: "#/components/schemas/FulfillmentEndpoint"
+        outputMediaTypes:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 3
+        slaSeconds:
+          type: integer
+          format: uint32
+          minimum: 1
+          description: Optional fulfillment target measured from commitment creation.
+
+    FulfillmentHandoff:
+      type: object
+      additionalProperties: false
+      required: [request, deliveryEndpoint]
+      properties:
+        request:
+          $ref: "#/components/schemas/Subject"
+        deliveryEndpoint:
+          $ref: "#/components/schemas/FulfillmentEndpoint"
+
+    FulfillmentTerms:
+      type: object
+      additionalProperties: false
+      required: [spec, handoff]
+      properties:
+        spec:
+          $ref: "#/components/schemas/FulfillmentSpec"
+        handoff:
+          $ref: "#/components/schemas/FulfillmentHandoff"
+
     MechanismSelection:
       description: Supported versioned allocation mechanism and its immutable configuration.
       oneOf:
         - $ref: "#/components/schemas/DirectClaimMechanism"
         - $ref: "#/components/schemas/SealedAuctionMechanism"
+        - $ref: "#/components/schemas/RequestForOffersMechanism"
       discriminator:
         propertyName: presetId
         mapping:
           direct-claim.v1: "#/components/schemas/DirectClaimMechanism"
           sealed-forward-auction.v1: "#/components/schemas/SealedAuctionMechanism"
+          request-for-offers.v1: "#/components/schemas/RequestForOffersMechanism"
+
+    FundingPolicy:
+      type: object
+      additionalProperties: false
+      required: [mode]
+      properties:
+        mode:
+          type: string
+          enum: [none, reserve_on_submission]
+        acceptedRailIds:
+          type: array
+          items:
+            type: string
+            minLength: 1
+          description: Rails accepted for funded participation.
+        settlementGraceSeconds:
+          type: integer
+          format: uint32
+          minimum: 0
+          description: Additional authorization lifetime required beyond the mechanism horizon.
 
     DirectClaimMechanism:
       type: object
@@ -1024,6 +2229,59 @@ components:
           const: sealed-forward-auction.v1
         config:
           $ref: "#/components/schemas/SealedAuctionConfig"
+
+    RequestForOffersMechanism:
+      type: object
+      additionalProperties: false
+      required: [presetId, config]
+      properties:
+        presetId:
+          type: string
+          const: request-for-offers.v1
+        config:
+          $ref: "#/components/schemas/RequestForOffersConfig"
+
+    RequestForOffersConfig:
+      type: object
+      additionalProperties: false
+      required: [capacity, offerSchema, offersCloseAt, selectionClosesAt, selectionTiming, pricing]
+      properties:
+        capacity:
+          type: integer
+          format: uint32
+          minimum: 1
+        offerSchema:
+          type: string
+          minLength: 1
+        offersCloseAt:
+          type: string
+          format: date-time
+          description: Must be after publication.
+        selectionClosesAt:
+          type: string
+          format: date-time
+          description: Must be after offersCloseAt.
+        selectionTiming:
+          type: string
+          const: after_deadline
+        pricing:
+          $ref: "#/components/schemas/RequestForOffersPricing"
+
+    RequestForOffersPricing:
+      type: object
+      additionalProperties: false
+      required: [mode]
+      properties:
+        mode:
+          type: string
+          enum: [none, optional, required]
+        currency:
+          $ref: "#/components/schemas/Currency"
+        maximumAmountMinor:
+          type: integer
+          format: int64
+          minimum: 1
+      description: None forbids currency and maximum; optional or required need one currency.
 
     DirectClaimConfig:
       description: Capacity, pricing, and confirmation rules for a direct-claim market.
@@ -1160,7 +2418,7 @@ components:
     Market:
       type: object
       additionalProperties: false
-      required: [id, version, state, creator, subject, mechanism, mechanismState, createdAt, updatedAt]
+      required: [id, version, state, creator, subject, mechanism, mechanismState, funding, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -1177,6 +2435,8 @@ components:
           $ref: "#/components/schemas/CommandIdentity"
         subject:
           $ref: "#/components/schemas/Subject"
+        fulfillment:
+          $ref: "#/components/schemas/FulfillmentSpec"
         mechanism:
           $ref: "#/components/schemas/MechanismSelection"
         mechanismState:
@@ -1184,12 +2444,207 @@ components:
           oneOf:
             - $ref: "#/components/schemas/DirectClaimState"
             - $ref: "#/components/schemas/SealedAuctionState"
+            - $ref: "#/components/schemas/RequestForOffersState"
+        funding:
+          $ref: "#/components/schemas/FundingPolicy"
+        publicationCredentialId:
+          type: string
+          minLength: 1
+          description: Credential verified by configured admission policy when the market was published.
         createdAt:
           type: string
           format: date-time
         updatedAt:
           type: string
           format: date-time
+
+    MarketListPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicMarket"
+        nextCursor:
+          type: string
+          minLength: 1
+          description: Opaque cursor for the next page. Omitted on the final page.
+
+    PublicMarket:
+      type: object
+      additionalProperties: false
+      required: [id, version, state, creatorPrincipalId, subject, mechanism, mechanismState, funding, publicationVerified, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          minLength: 1
+        version:
+          type: integer
+          format: uint64
+          minimum: 1
+        state:
+          type: string
+          enum: [open, closed]
+        creatorPrincipalId:
+          type: string
+          minLength: 1
+          description: Principal responsible for the published market. Creating actor and authority details are omitted.
+        subject:
+          $ref: "#/components/schemas/Subject"
+        fulfillment:
+          $ref: "#/components/schemas/FulfillmentSpec"
+        mechanism:
+          $ref: "#/components/schemas/MechanismSelection"
+        mechanismState:
+          type: object
+          description: Preset-owned public state with private bid and offer identifiers removed.
+        funding:
+          $ref: "#/components/schemas/FundingPolicy"
+        paymentCredentialInstructions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PaymentCredentialInstruction"
+        publicationVerified:
+          type: boolean
+          description: Whether configured publication admission verified a credential without disclosing its identifier.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ParticipantMarketOutcome:
+      type: object
+      additionalProperties: false
+      required: [market, bidReceipts, offers, commitments]
+      properties:
+        market:
+          $ref: "#/components/schemas/PublicMarket"
+        bidReceipts:
+          type: array
+          description: Accepted sealed-bid receipts belonging to the represented principal.
+          items:
+            $ref: "#/components/schemas/SealedBidReceipt"
+        offers:
+          type: array
+          description: Own offers with current state; private terms are omitted.
+          items:
+            $ref: "#/components/schemas/ParticipantOfferOutcome"
+        commitments:
+          type: array
+          description: Current commitments allocated to the represented principal.
+          items:
+            $ref: "#/components/schemas/Commitment"
+
+    ParticipantOfferOutcome:
+      type: object
+      additionalProperties: false
+      required: [id, state, submittedAt, updatedAt]
+      properties:
+        id:
+          type: string
+          minLength: 1
+        state:
+          type: string
+          enum: [active, withdrawn, selected, not_selected, expired]
+        submittedAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    RequestForOffersView:
+      type: object
+      additionalProperties: false
+      required: [market, offers]
+      properties:
+        market:
+          $ref: "#/components/schemas/PublicMarket"
+        offers:
+          type: array
+          description: Requester sees all, submitting provider sees own, other actors see none.
+          items:
+            $ref: "#/components/schemas/RequestForOfferView"
+
+    RequestForOfferView:
+      type: object
+      additionalProperties: false
+      required: [id, providerPrincipalId, terms, state, submittedAt, updatedAt]
+      properties:
+        id:
+          type: string
+        providerPrincipalId:
+          type: string
+        terms:
+          $ref: "#/components/schemas/Subject"
+        amountMinor:
+          type: integer
+          format: int64
+          minimum: 1
+        state:
+          type: string
+          enum: [active, withdrawn, selected, not_selected, expired]
+        submittedAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PublicMarketActivity:
+      type: object
+      additionalProperties: false
+      required: [marketId, items]
+      properties:
+        marketId:
+          type: string
+          minLength: 1
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicMarketActivityItem"
+
+    PublicMarketActivityItem:
+      type: object
+      additionalProperties: false
+      required: [sequence, type, marketVersion, occurredAt]
+      properties:
+        sequence:
+          type: integer
+          format: int64
+          minimum: 1
+        type:
+          type: string
+          description: Public lifecycle event type.
+        marketVersion:
+          type: integer
+          format: uint64
+          minimum: 1
+        occurredAt:
+          type: string
+          format: date-time
+        data:
+          type: object
+          description: Event-specific public counts, states, outcomes, or clearing terms.
+
+    PaymentCredentialInstruction:
+      type: object
+      additionalProperties: false
+      required: [railId, credentialType, credentialTarget]
+      properties:
+        railId:
+          type: string
+          minLength: 1
+        credentialType:
+          type: string
+          minLength: 1
+        credentialTarget:
+          type: string
+          minLength: 1
 
     DirectClaimState:
       type: object
@@ -1225,6 +2680,27 @@ components:
             type: string
             minLength: 1
 
+    RequestForOffersState:
+      type: object
+      additionalProperties: false
+      required: [phase, activeOfferCount]
+      properties:
+        phase:
+          type: string
+          enum: [accepting_offers, awaiting_selection, resolved]
+        activeOfferCount:
+          type: integer
+          format: uint32
+          minimum: 0
+        outcome:
+          type: string
+          enum: [offers_selected, no_selection]
+        selectedOfferIds:
+          type: array
+          items:
+            type: string
+          description: Present in internal market results, omitted from public market projection.
+
     MarketResult:
       type: object
       additionalProperties: false
@@ -1256,10 +2732,49 @@ components:
             $ref: "#/components/schemas/SealedBidReceipt"
         auctionResolution:
           $ref: "#/components/schemas/SealedAuctionResolution"
+        offerReceipts:
+          type: array
+          description: Public-safe receipts returned after offer submission.
+          items:
+            $ref: "#/components/schemas/RequestForOfferReceipt"
+        requestForOffersResolution:
+          $ref: "#/components/schemas/RequestForOffersResolution"
         events:
           type: array
           items:
             $ref: "#/components/schemas/Event"
+
+    RequestForOfferReceipt:
+      type: object
+      additionalProperties: false
+      required: [offerId, marketId, marketVersion, state, submittedAt]
+      properties:
+        offerId:
+          type: string
+        marketId:
+          type: string
+        marketVersion:
+          type: integer
+          format: uint64
+        state:
+          type: string
+          enum: [active, withdrawn, selected, not_selected, expired]
+        submittedAt:
+          type: string
+          format: date-time
+
+    RequestForOffersResolution:
+      type: object
+      additionalProperties: false
+      required: [outcome]
+      properties:
+        outcome:
+          type: string
+          enum: [offers_selected, no_selection]
+        selectedOfferIds:
+          type: array
+          items:
+            type: string
 
     Commitment:
       type: object
@@ -1294,6 +2809,27 @@ components:
           type: string
           minLength: 1
         participantPrincipalId:
+          type: string
+          minLength: 1
+        paymentAuthorizationId:
+          type: string
+          minLength: 1
+        settlementState:
+          type: string
+          enum: [pending, settled, failed]
+        settlementOperationId:
+          type: string
+          minLength: 1
+        settlementFailureCode:
+          type: string
+          minLength: 1
+        refundState:
+          type: string
+          enum: [pending, refunded, failed]
+        refundOperationId:
+          type: string
+          minLength: 1
+        refundFailureCode:
           type: string
           minLength: 1
         state:
@@ -1334,6 +2870,8 @@ components:
           $ref: "#/components/schemas/Subject"
         pricing:
           $ref: "#/components/schemas/DirectClaimPricing"
+        fulfillment:
+          $ref: "#/components/schemas/FulfillmentTerms"
 
     SealedAuctionCommitmentTerms:
       type: object
@@ -1450,6 +2988,12 @@ components:
             - commitment.confirmation_recorded
             - commitment.declined
             - commitment.expired
+            - commitment.settlement_pending
+            - commitment.settlement_settled
+            - commitment.settlement_failed
+            - commitment.refund_pending
+            - commitment.refunded
+            - commitment.refund_failed
         marketId:
           type: string
           minLength: 1
@@ -1481,6 +3025,8 @@ components:
             - $ref: "#/components/schemas/SealedBidSubmittedEventData"
             - $ref: "#/components/schemas/SealedAuctionResolution"
             - $ref: "#/components/schemas/CommitmentStateChangedEventData"
+            - $ref: "#/components/schemas/CommitmentSettlementChangedEventData"
+            - $ref: "#/components/schemas/CommitmentRefundChangedEventData"
 
     MarketDraftCreatedEventData:
       type: object
@@ -1491,6 +3037,8 @@ components:
           $ref: "#/components/schemas/CommandIdentity"
         subject:
           $ref: "#/components/schemas/Subject"
+        fulfillment:
+          $ref: "#/components/schemas/FulfillmentSpec"
         mechanism:
           $ref: "#/components/schemas/MechanismSelection"
         mechanismState:
@@ -1509,6 +3057,9 @@ components:
         state:
           type: string
           const: open
+        publicationCredentialId:
+          type: string
+          minLength: 1
 
     DirectClaimAcceptedEventData:
       type: object
@@ -1518,6 +3069,8 @@ components:
         commitmentId:
           type: string
           minLength: 1
+        fulfillment:
+          $ref: "#/components/schemas/FulfillmentHandoff"
         allocated:
           type: integer
           format: uint32
@@ -1565,6 +3118,48 @@ components:
           type: string
           format: date-time
 
+    CommitmentSettlementChangedEventData:
+      type: object
+      additionalProperties: false
+      required: [commitmentId, paymentOperationId, paymentAuthorizationId, settlementState]
+      properties:
+        commitmentId:
+          type: string
+          minLength: 1
+        paymentOperationId:
+          type: string
+          minLength: 1
+        paymentAuthorizationId:
+          type: string
+          minLength: 1
+        settlementState:
+          type: string
+          enum: [pending, settled, failed]
+        failureCode:
+          type: string
+          minLength: 1
+
+    CommitmentRefundChangedEventData:
+      type: object
+      additionalProperties: false
+      required: [commitmentId, paymentOperationId, paymentAuthorizationId, refundState]
+      properties:
+        commitmentId:
+          type: string
+          minLength: 1
+        paymentOperationId:
+          type: string
+          minLength: 1
+        paymentAuthorizationId:
+          type: string
+          minLength: 1
+        refundState:
+          type: string
+          enum: [pending, refunded, failed]
+        failureCode:
+          type: string
+          minLength: 1
+
     MarketRecord:
       type: object
       additionalProperties: false
@@ -1580,12 +3175,46 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Commitment"
+        privateOffers:
+          type: array
+          description: Byte-preserved private offer snapshots, present only for creator-authorized request-for-offers records.
+          items:
+            $ref: "#/components/schemas/PrivateRequestForOffer"
         events:
           type: array
           items:
             $ref: "#/components/schemas/Event"
         integrity:
           $ref: "#/components/schemas/MarketRecordIntegrity"
+
+    PrivateRequestForOffer:
+      type: object
+      additionalProperties: false
+      required: [id, marketId, marketVersion, identity, terms, state, submittedAt, updatedAt]
+      properties:
+        id:
+          type: string
+        marketId:
+          type: string
+        marketVersion:
+          type: integer
+          format: uint64
+        identity:
+          $ref: "#/components/schemas/CommandIdentity"
+        terms:
+          $ref: "#/components/schemas/Subject"
+        amountMinor:
+          type: integer
+          format: int64
+        state:
+          type: string
+          enum: [active, withdrawn, selected, not_selected, expired]
+        submittedAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
 
     RecordedCommand:
       type: object
@@ -1610,6 +3239,9 @@ components:
             - commitment.confirm
             - commitment.decline
             - commitment.expire
+            - commitment.record_settlement_outcome
+            - commitment.refund
+            - commitment.record_refund_outcome
         marketId:
           type: string
           description: Empty only when a rejected command could not be associated with a market.
@@ -1647,7 +3279,7 @@ components:
           description: Unsigned content hash of the exact returned record view.
         stateReconstructed:
           type: boolean
-          description: True when the current verifier independently reproduced stored snapshots from events.
+          description: True when the current verifier reproduced stored snapshots from ordered decisions and events, checking RFO private offer bytes against submission digests.
 
     ErrorResponse:
       type: object
@@ -1673,6 +3305,9 @@ components:
         - forbidden
         - identity_conflict
         - identity_not_found
+        - invalid_credential
+        - credential_conflict
+        - signing_key_mismatch
         - delegation_not_found
         - delegation_conflict
         - delegation_inactive
@@ -1693,3 +3328,8 @@ components:
         - invalid_commitment_transition
         - actor_not_authorized
         - capacity_exhausted
+        - invalid_payment_authorization
+        - payment_authority_required
+        - payment_mandate_exceeded
+        - payment_rail_unavailable
+        - payment_rail_unsupported

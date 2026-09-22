@@ -1,145 +1,156 @@
 ---
 title: "Quickstart"
-description: "Run the first complete market flow over either HTTP or MCP."
+description: "Create, publish, claim, and inspect an unfunded market."
 ---
 
-This walkthrough creates a posted-price market for a restaurant table,
-publishes it, accepts a direct claim, and inspects the resulting record. The
-table makes the example concrete; the workflow is not restaurant-specific.
+This walkthrough offers one place in a product-feedback session through
+`direct-claim.v1`. A participant claims it and confirms the resulting
+commitment. The market is unfunded: no payment authorization or rail is needed,
+and no money moves.
 
-You need an Ambient base URL plus provisioned credentials for two actors:
+You need an Ambient base URL and short-lived bearer tokens for two actors:
+one creator and one participant. An agent can [self-register its key, prove
+possession, and obtain a token](/authentication#self-service-signup-and-agent-led-approval).
+People can sign up by email when delivery is configured. An agent representing
+someone else needs their delegation and includes its ID as `authorityRef` in
+commands. Bootstrap HMAC credentials are for controlled deployments, not the
+normal participant path.
 
-- `restaurant-1`, which creates the market; and
-- `diner-1`, which participates.
+In the examples, replace `creator-1` and `participant-1` with the actual
+principal IDs returned by registration, choose a unique `marketId`, and use
+new `commandId` values for each action. Send authenticated HTTP requests with
+`Authorization: Bearer <accessToken>`. For MCP, connect to `{baseURL}/mcp`
+with the same bearer token and call the named tools with the corresponding
+fields.
 
-For HTTP, sign every request as described in
-[Authentication](/authentication). For MCP, connect to `{baseURL}/mcp`
-with the actor's bearer token.
+## 1. Create and review a draft
 
-## 1. Create a draft
-
-As `restaurant-1`, send `POST /v1/markets`:
+As the creator, send `POST /v1/markets` or call `create_market`:
 
 ```json
 {
-  "commandId": "table-create-1",
-  "marketId": "table-2026-09-19-1900",
-  "principalId": "restaurant-1",
+  "commandId": "feedback-create-1",
+  "marketId": "feedback-session-1",
+  "principalId": "creator-1",
   "subject": {
-    "schema": "restaurant-table.v1",
+    "schema": "feedback-session.v1",
     "data": {
-      "partySize": 2,
-      "startsAt": "2026-09-19T19:00:00Z"
+      "title": "Product feedback session",
+      "description": "One 30-minute feedback session"
     }
   },
   "mechanism": {
     "presetId": "direct-claim.v1",
     "config": {
       "capacity": 1,
-      "pricing": {
-        "mode": "posted",
-        "amountMinor": 7500,
-        "currency": "USD"
-      },
+      "pricing": {"mode": "free"},
       "confirmation": "participant",
       "holdDurationSeconds": 600
     }
-  }
+  },
+  "funding": {"mode": "none"}
 }
 ```
 
-The response contains a `draft` market at version `1` and a
-`market.draft_created` event. Review the normalized mechanism configuration
-before publication.
+Ambient returns a `draft` market at version `1`. Review the subject and
+normalized mechanism configuration. A deployment may require a publication
+credential for this subject schema; obtain one from its configured issuer
+before the next step if so.
 
-The equivalent MCP call is `create_market` with the same fields.
+## 2. Publish
 
-## 2. Publish the market
-
-As `restaurant-1`, send
-`POST /v1/markets/table-2026-09-19-1900/publish`:
+As the creator, send `POST /v1/markets/feedback-session-1/publish` or call
+`publish_market` with `marketId` plus:
 
 ```json
 {
-  "commandId": "table-publish-1",
+  "commandId": "feedback-publish-1",
   "expectedVersion": 1,
-  "principalId": "restaurant-1"
+  "principalId": "creator-1"
 }
 ```
 
-The market becomes `open` at version `2`. The equivalent MCP tool is
-`publish_market`; include the market ID in the tool input.
+Include `credentialId` if publication admission requires it. The market
+becomes `open` at version `2`. Published markets are publicly discoverable;
+drafts are not.
 
-## 3. Claim the table
+## 3. Discover and inspect
 
-As `diner-1`, send
-`POST /v1/markets/table-2026-09-19-1900/direct-claims`:
+Anyone can read the unsigned HTTP endpoints:
+
+```text
+GET /v1/markets
+GET /v1/markets/feedback-session-1
+GET /v1/markets/feedback-session-1/activity
+```
+
+`GET /v1/markets` paginates published markets. The snapshot contains the
+subject, mechanism rules, current public state, funding mode, and timestamps.
+The activity endpoint shows a redacted event timeline. Authenticated MCP
+clients can use `list_markets` and `get_market` to discover the same public
+market information.
+
+## 4. Claim and confirm
+
+As the participant, send
+`POST /v1/markets/feedback-session-1/direct-claims` or call
+`submit_direct_claim`:
 
 ```json
 {
-  "commandId": "table-claim-1",
-  "principalId": "diner-1"
+  "commandId": "feedback-claim-1",
+  "principalId": "participant-1"
 }
 ```
 
-Omitting `expectedVersion` asks Ambient to order competing claims by server
-arrival. The successful result closes this one-capacity market and returns a
-commitment in `awaiting_confirmations`. Save its `id`; it is required for the
-next command. The equivalent MCP tool is `submit_direct_claim`.
+Omitting `expectedVersion` asks Ambient to order concurrent claims by server
+arrival. The accepted claim fills this one-capacity market and creates a
+commitment in `awaiting_confirmations`. Save its `id`, or recover it later
+from the participant's private outcome read:
 
-The commitment terms contain the table subject and posted USD 75.00 price.
-Ambient has recorded the terms but has not collected payment.
+```text
+GET /v1/markets/feedback-session-1/my-outcome
+```
 
-## 4. Confirm the commitment
+The MCP equivalent is `get_my_market_outcome`. This read requires the
+participant's token or current delegated `market:claim` authority. It shows
+that principal's commitments, not other participants' private history.
 
-As `diner-1`, send `POST /v1/commitments/{commitmentId}/confirm`:
+As the participant, send `POST /v1/commitments/{commitmentId}/confirm` or
+call `confirm_commitment`:
 
 ```json
 {
-  "commandId": "table-confirm-1",
-  "principalId": "diner-1"
+  "commandId": "feedback-confirm-1",
+  "principalId": "participant-1"
 }
 ```
 
-The commitment becomes `committed`. If the diner instead calls `/decline`, or
-does not confirm before the ten-minute hold expires, the commitment terminates
-and the preset returns the table's capacity to the open market.
+The commitment becomes `committed`. Declining, or missing the ten-minute
+confirmation deadline, releases the capacity. A committed allocation is not
+proof that the session took place.
 
-The MCP tools are `confirm_commitment` and `decline_commitment`.
+## 5. Inspect the creator record
 
-## 5. Read the result and record
+The creator can read `GET /v1/markets/feedback-session-1/record` or call
+`get_market_record`. The record includes the create, publish, claim, and
+confirmation decisions; ordered events; market and commitment snapshots; and
+integrity metadata. For this direct-claim market, the verifier reports
+`stateReconstructed: true`. The record's hash is an unsigned content hash,
+not an external attestation. Participants use `/my-outcome`, not the
+creator-only record.
 
-Any authenticated actor can read the current snapshot:
+## Other mechanisms
 
-```text
-GET /v1/markets/table-2026-09-19-1900
-```
-
-The restaurant's actor can retrieve the full ordered record:
-
-```text
-GET /v1/markets/table-2026-09-19-1900/record
-```
-
-The corresponding MCP tools are `get_market` and `get_market_record`.
-The record shows the create, publish, claim, and confirmation commands; their
-events; the final market and commitment snapshots; and integrity metadata.
-
-## Sealed-auction variant
-
-To allocate one table through a sealed second-price auction, create the market
-with `sealed-forward-auction.v1` and configure `currency`, optional
-`reserveAmountMinor`, `closesAt`, and `holdDurationSeconds`. After publication,
-each participant submits one private bid through
-`POST /v1/markets/{marketId}/sealed-bids` or `submit_sealed_bid`.
-
-Publication schedules the close durably. At `closesAt`, the worker records
-`no_trade` or selects a winner, computes the second price, and creates a
-winner-confirmed commitment. Bid receipts and open-auction records do not
-disclose bid amounts. Exact request shapes are in the transport references.
-
-## Retry rule
+Use `sealed-forward-auction.v1` when participants submit private bids before
+a fixed close and the winner confirms a second-price result. Use
+`request-for-offers.v1` when a requester publishes a need, providers submit
+private offers, and the requester selects after the offer deadline. Both can
+run unfunded. [Core concepts](/concepts#markets-and-mechanisms) compares them;
+[Request for offers](/request-for-offers) gives that flow in detail. The
+generated [HTTP endpoint reference](/http-api) and [MCP tools](/mcp-tools)
+give exact request fields.
 
 Treat every `commandId` as an actor-scoped idempotency key. If a response is
-lost, retry the identical request with the same ID. Do not reuse that ID for a
-different body; Ambient returns `idempotency_conflict`.
+lost, retry the identical request with the same ID. Use a new ID for changed
+input or a different action.

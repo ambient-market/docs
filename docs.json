@@ -12,11 +12,11 @@
     "groups": [
       {
         "group": "Get started",
-        "pages": ["overview", "quickstart"]
+        "pages": ["overview", "quickstart", "buyer-onboarding", "seller-onboarding"]
       },
       {
         "group": "Core concepts",
-        "pages": ["concepts", "authentication"]
+        "pages": ["concepts", "request-for-offers", "authentication", "payments"]
       },
       {
         "group": "Reference",
