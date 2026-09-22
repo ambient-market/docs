@@ -9,9 +9,9 @@ the market, act with explicit authority, and receive a recorded outcome.
 
 The first launch supports **unfunded markets**. Prices and bids can be part of
 the agreed terms, but Ambient does not move money in the launch flow. Payments
-integration is underway: the authorization and settlement foundation exists,
-the first Stripe integration has begun, and participant and creator onboarding
-for funded markets is coming next. See [Payments](/payments).
+integration is underway: funded direct claims and sealed auctions are in
+progress, while funded request for offers and additional payment rails are
+upcoming. See [Payments](/payments).
 
 ## Three market mechanisms
 
