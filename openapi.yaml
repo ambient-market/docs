@@ -158,7 +158,7 @@ paths:
                 challengeId: {type: string}
                 signature: {type: string, description: Unpadded base64url Ed25519 signature over decoded signingPayload.}
       responses:
-        "201": { description: Returns principalId, actorId, and keyId. }
+        "201": { description: "Returns principalId, actorId, and keyId." }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "429": { description: Shared agent signup completion limit reached. }
 
@@ -224,7 +224,7 @@ paths:
                 paymentMandate: { $ref: "#/components/schemas/PaymentMandate" }
                 validUntil: {type: string, format: date-time}
       responses:
-        "202": { description: Returns challenge ID, delegation ID, and expiry; the action-bound code is sent to the person. }
+        "202": { description: "Returns challenge ID, delegation ID, and expiry; the action-bound code is sent to the person." }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "429": { description: Email challenge rate limit reached. }
 
@@ -245,7 +245,7 @@ paths:
                 challengeId: {type: string}
                 code: {type: string, pattern: '^[0-9]{8}$'}
       responses:
-        "201": { description: Returns principalId and delegationId, never a human login token. }
+        "201": { description: "Returns principalId and delegationId, never a human login token." }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
   /v1/admin/identities:

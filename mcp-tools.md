@@ -192,7 +192,7 @@ These read tools take one required string field, `marketId`. Private reads also
 accept optional `principalId` and `authorityRef` for current delegated
 authority; omit both for self-representation.
 
-- `get_market` returns `PublicMarket`. See [Get a market](/api-reference/markets/get-a-market).
+- `get_market` returns `PublicMarket`. See [Get a published market](/api-reference/markets/get-a-published-market).
 - `get_market_record` returns `MarketRecord` to the creator principal or the
   original creating actor with current `market:create` authority. See
   [Get a market record](/api-reference/records/get-a-market-record).
