@@ -12,11 +12,24 @@
     "groups": [
       {
         "group": "Get started",
-        "pages": ["overview", "quickstart", "buyer-onboarding", "seller-onboarding"]
+        "pages": ["overview", "quickstart"]
+      },
+      {
+        "group": "Guides",
+        "pages": ["buyer-onboarding", "seller-onboarding"]
       },
       {
         "group": "Core concepts",
-        "pages": ["concepts", "request-for-offers", "authentication", "payments"]
+        "pages": [
+          "concepts",
+          {
+            "group": "Market mechanisms",
+            "pages": ["mechanisms", "direct-claim", "sealed-auction", "request-for-offers"]
+          },
+          "records",
+          "authentication",
+          "payments"
+        ]
       },
       {
         "group": "Reference",

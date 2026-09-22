@@ -1,156 +1,95 @@
 ---
-title: "Quickstart"
-description: "Create, publish, claim, and inspect an unfunded market."
+title: "Register for an event"
+description: "Sign up for Ambient and have an agent claim a published event registration."
 ---
 
-This walkthrough offers one place in a product-feedback session through
-`direct-claim.v1`. A participant claims it and confirms the resulting
-commitment. The market is unfunded: no payment authorization or rail is needed,
-and no money moves.
+This quickstart follows the shortest useful Ambient workflow: you ask an agent
+to sign you up and register you for a published event. The event already
+exists, so the guide stays focused on identity, authority, discovery, and one
+successful market action.
 
-You need an Ambient base URL and short-lived bearer tokens for two actors:
-one creator and one participant. An agent can [self-register its key, prove
-possession, and obtain a token](/authentication#self-service-signup-and-agent-led-approval).
-People can sign up by email when delivery is configured. An agent representing
-someone else needs their delegation and includes its ID as `authorityRef` in
-commands. Bootstrap HMAC credentials are for controlled deployments, not the
-normal participant path.
+The market is unfunded. No payment method is needed and no money moves.
 
-In the examples, replace `creator-1` and `participant-1` with the actual
-principal IDs returned by registration, choose a unique `marketId`, and use
-new `commandId` values for each action. Send authenticated HTTP requests with
-`Authorization: Bearer <accessToken>`. For MCP, connect to `{baseURL}/mcp`
-with the same bearer token and call the named tools with the corresponding
-fields.
+## 1. Give the agent the goal
 
-## 1. Create and review a draft
+Provide the event name and the email address that should control the resulting
+Ambient identity. For example:
 
-As the creator, send `POST /v1/markets` or call `create_market`:
+> Sign me up for Ambient with `alex@example.com` and register me for
+> Developer Dinner on October 15. Only use an unfunded market. Ask me before
+> accepting materially different terms.
 
-```json
-{
-  "commandId": "feedback-create-1",
-  "marketId": "feedback-session-1",
-  "principalId": "creator-1",
-  "subject": {
-    "schema": "feedback-session.v1",
-    "data": {
-      "title": "Product feedback session",
-      "description": "One 30-minute feedback session"
-    }
-  },
-  "mechanism": {
-    "presetId": "direct-claim.v1",
-    "config": {
-      "capacity": 1,
-      "pricing": {"mode": "free"},
-      "confirmation": "participant",
-      "holdDurationSeconds": 600
-    }
-  },
-  "funding": {"mode": "none"}
-}
-```
+The agent needs HTTPS access to the Ambient API or MCP endpoint and a place to
+retain its Ed25519 private key.
 
-Ambient returns a `draft` market at version `1`. Review the subject and
-normalized mechanism configuration. A deployment may require a publication
-credential for this subject schema; obtain one from its configured issuer
-before the next step if so.
+## 2. Approve the agent
 
-## 2. Publish
-
-As the creator, send `POST /v1/markets/feedback-session-1/publish` or call
-`publish_market` with `marketId` plus:
+The agent first registers its own key through the unsigned agent signup
+endpoints, then authenticates and requests permission to act for your email
+identity. For this task it requests only:
 
 ```json
 {
-  "commandId": "feedback-publish-1",
-  "expectedVersion": 1,
-  "principalId": "creator-1"
+  "email": "alex@example.com",
+  "scopes": ["market:claim"],
+  "validUntil": "<RFC3339 expiry>"
 }
 ```
 
-Include `credentialId` if publication admission requires it. The market
-becomes `open` at version `2`. Published markets are publicly discoverable;
-drafts are not.
+Ambient emails you a summary of the request and a one-time delegation code.
+Give that delegation code to the agent. Do not give it a login code. The agent
+exchanges the approval code for your `principalId` and `delegationId`.
 
-## 3. Discover and inspect
+See [Authentication and authority](/authentication) for the exact signup and
+approval endpoints.
 
-Anyone can read the unsigned HTTP endpoints:
+## 3. Find and inspect the event
 
-```text
-GET /v1/markets
-GET /v1/markets/feedback-session-1
-GET /v1/markets/feedback-session-1/activity
-```
+The agent calls `list_markets` or `GET /v1/markets`, finds the event by its
+public subject data, and reads the market with `get_market` or
+`GET /v1/markets/{marketId}`.
 
-`GET /v1/markets` paginates published markets. The snapshot contains the
-subject, mechanism rules, current public state, funding mode, and timestamps.
-The activity endpoint shows a redacted event timeline. Authenticated MCP
-clients can use `list_markets` and `get_market` to discover the same public
-market information.
+Before acting, it verifies:
 
-## 4. Claim and confirm
+- the event identity and time;
+- that the market uses `direct-claim.v1`;
+- that registration capacity remains;
+- any confirmation deadline; and
+- that `funding.mode` is `none`.
 
-As the participant, send
-`POST /v1/markets/feedback-session-1/direct-claims` or call
-`submit_direct_claim`:
+If more than one market could match the request, the agent should ask you to
+choose rather than guessing.
+
+## 4. Register
+
+The agent calls `submit_direct_claim` with the represented principal and its
+delegation:
 
 ```json
 {
-  "commandId": "feedback-claim-1",
-  "principalId": "participant-1"
+  "commandId": "event-registration-1",
+  "marketId": "<market ID>",
+  "principalId": "<your principal ID>",
+  "authorityRef": "<delegation ID>"
 }
 ```
 
-Omitting `expectedVersion` asks Ambient to order concurrent claims by server
-arrival. The accepted claim fills this one-capacity market and creates a
-commitment in `awaiting_confirmations`. Save its `id`, or recover it later
-from the participant's private outcome read:
+For a first-valid event registration with no confirmation step, the returned
+commitment is immediately `committed`. If the event requires participant
+confirmation, the agent must also hold `commitment:confirm` authority and call
+`confirm_commitment` before the stated deadline.
 
-```text
-GET /v1/markets/feedback-session-1/my-outcome
-```
+## 5. Verify the result
 
-The MCP equivalent is `get_my_market_outcome`. This read requires the
-participant's token or current delegated `market:claim` authority. It shows
-that principal's commitments, not other participants' private history.
+The agent calls `get_my_market_outcome` or
+`GET /v1/markets/{marketId}/my-outcome` using the same represented principal
+and delegation. That private view returns your commitment without exposing
+other registrants.
 
-As the participant, send `POST /v1/commitments/{commitmentId}/confirm` or
-call `confirm_commitment`:
+A committed registration records the agreement created by the market. Event
+attendance, check-in, and delivery remain outside Ambient unless the event
+operator integrates them separately.
 
-```json
-{
-  "commandId": "feedback-confirm-1",
-  "principalId": "participant-1"
-}
-```
-
-The commitment becomes `committed`. Declining, or missing the ten-minute
-confirmation deadline, releases the capacity. A committed allocation is not
-proof that the session took place.
-
-## 5. Inspect the creator record
-
-The creator can read `GET /v1/markets/feedback-session-1/record` or call
-`get_market_record`. The record includes the create, publish, claim, and
-confirmation decisions; ordered events; market and commitment snapshots; and
-integrity metadata. For this direct-claim market, the verifier reports
-`stateReconstructed: true`. The record's hash is an unsigned content hash,
-not an external attestation. Participants use `/my-outcome`, not the
-creator-only record.
-
-## Other mechanisms
-
-Use `sealed-forward-auction.v1` when participants submit private bids before
-a fixed close and the winner confirms a second-price result. Use
-`request-for-offers.v1` when a requester publishes a need, providers submit
-private offers, and the requester selects after the offer deadline. Both can
-run unfunded. [Core concepts](/concepts#markets-and-mechanisms) compares them;
-[Request for offers](/request-for-offers) gives that flow in detail. The
-generated [HTTP endpoint reference](/http-api) and [MCP tools](/mcp-tools)
-give exact request fields.
-
-Treat every `commandId` as an actor-scoped idempotency key. If a response is
-lost, retry the identical request with the same ID. Use a new ID for changed
-input or a different action.
+For another task, keep the same identity and grant only the additional scope
+the agent needs. See [Participant onboarding](/buyer-onboarding) for claims,
+bids, offers, and confirmation.
