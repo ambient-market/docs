@@ -27,6 +27,7 @@ The implemented scopes are:
 ```text
 market:create
 market:publish
+market:cancel
 market:claim
 market:bid
 market:offer_submit
@@ -89,9 +90,13 @@ than invisible background changes.
 
 ## Public and private views
 
-Published market discovery, snapshots, and activity are public. They expose
+Listed published market discovery, exact-ID snapshots, and activity are public.
+An unlisted market is omitted from discovery but remains public to anyone who
+knows its ID; unlisted is not private. Public views expose
 rules, state, counts, and safe outcomes without revealing private bids,
 offers, commitments, authority references, or payment records.
+Market IDs are deterministically derived identifiers, not secrets; their
+opacity must not be used as a confidentiality boundary.
 
 An authenticated participant can read its own receipts, offer states, and
 commitments. The creator has a separate full record. See

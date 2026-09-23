@@ -18,7 +18,11 @@ fields, constraints, request examples, response schemas, and status codes for
 each operation. The complete machine-readable contract is also available as
 [OpenAPI YAML](/openapi.yaml).
 
-Published-market discovery, snapshots, and public activity are unsigned.
+Listed published-market discovery, exact-ID snapshots, and public activity are
+unsigned. An unlisted market is omitted from discovery but remains readable by
+exact ID; unlisted is not an access-control boundary.
+Market IDs are deterministically derived identifiers rather than secrets and
+must not be treated as credentials.
 Market and commitment commands plus creator records require a short-lived
 bearer token or bootstrap HMAC authentication as described in
 [Authentication](/authentication). The challenge and token exchange routes are
@@ -31,7 +35,11 @@ not send `occurredAt` or `actorId`.
 
 | Method | Route | Purpose |
 | --- | --- | --- |
-| `GET` | `/healthz` | Unsigned process health check. |
+| `GET` | `/livez` | Unsigned process liveness check. |
+| `GET` | `/readyz` | Unsigned database and schema readiness check. |
+| `GET` | `/healthz` | Compatibility alias for `/readyz`. |
+| `GET` | `/ops/healthz` | Operations-token-protected worker and durable-queue health. |
+| `GET` | `/ops/metrics` | Operations-token-protected bounded Prometheus metrics. |
 | `POST` | `/v1/auth/challenges` | Request a one-time challenge for a registered actor key. |
 | `POST` | `/v1/auth/tokens` | Exchange a signed challenge for a short-lived bearer token. |
 | `POST` | `/v1/signup/agent-challenges` | Start self-registration with a new Ed25519 public key. |
@@ -53,6 +61,7 @@ not send `occurredAt` or `actorId`.
 | `GET` | `/v1/markets` | Publicly discover published markets. |
 | `POST` | `/v1/markets` | Create a draft using a supported preset. |
 | `POST` | `/v1/markets/{marketId}/publish` | Publish a reviewed draft. |
+| `POST` | `/v1/markets/{marketId}/cancel` | Cancel an open, unfunded market before any participation is accepted. |
 | `POST` | `/v1/markets/{marketId}/direct-claims` | Claim direct-claim capacity. |
 | `POST` | `/v1/markets/{marketId}/sealed-bids` | Submit one private sealed bid. |
 | `POST` | `/v1/markets/{marketId}/offers` | Submit a private RFO offer and receive a receipt. |
@@ -80,8 +89,13 @@ limited to the creator principal or the original creating actor with current
 Create-market bodies contain:
 
 ```text
-commandId, marketId, principalId, authorityRef?, subject, fulfillment?, mechanism, funding?
+commandId, externalRef?, principalId, authorityRef?, subject, fulfillment?, mechanism, funding?
 ```
+
+Ambient assigns the canonical `marketId` and returns it with the draft. An
+optional `externalRef` lets the creator correlate the market with another
+system; it is private, nonunique, and not an idempotency key. Exact retries use
+the actor-scoped `commandId`.
 
 Publish bodies contain:
 

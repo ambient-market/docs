@@ -23,6 +23,10 @@ delegation. Creating and publishing requires:
 - `market:create`; and
 - `market:publish`.
 
+Add `market:cancel` when the agent may withdraw an unfunded market before any
+participant acts. Once a claim, bid, or offer is accepted, the mechanism—not
+generic cancellation—governs what happens next.
+
 Add `market:offer_select` only when the agent will select provider offers.
 Add commitment confirmation or decline scopes only when the chosen mechanism
 requires the creator to make those decisions.

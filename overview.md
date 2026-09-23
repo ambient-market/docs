@@ -42,7 +42,7 @@ request, or other good.
 5. Ambient applies the selected rules, records the decisions, and returns the
    resulting commitment.
 
-Start with [Register for an event](/quickstart). The
+Start with [Run your first market](/quickstart). The
 [participant guide](/buyer-onboarding) and [creator guide](/seller-onboarding)
 cover broader agent-led workflows.
 

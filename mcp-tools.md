@@ -23,6 +23,7 @@ and audit behavior.
 | `get_market_creation_guide` | `MarketCreationGuide` | Read the authenticated actor ID, supported preset rules, and draft-to-publication sequence. |
 | `create_market` | `MarketResult` | Create a reviewed but unpublished market draft. |
 | `publish_market` | `MarketResult` | Open a draft market. |
+| `cancel_market` | `MarketResult` | Cancel an open, unfunded market before any participation is accepted. |
 | `list_markets` | `MarketListPage` | Discover published markets and their mechanics without a known market ID. |
 | `get_market` | `PublicMarket` | Read the published public snapshot; private auction state is withheld. |
 | `get_market_record` | `MarketRecord` | Read the creator-authorized ordered record. |
@@ -68,6 +69,10 @@ delegation reference.
 ## Authorize payment
 
 ### `authorize_payment`
+
+For funded participation, first create or discover the market and use its
+canonical `marketId` in this call. The payment authorization must be queued
+before submitting the funded claim or bid.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -129,7 +134,8 @@ journal entries.
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `commandId` | string | Yes | Actor-scoped idempotency key. |
-| `marketId` | string | Yes | Client-selected unique market identifier. |
+| `externalRef` | string | No | Creator-private correlation reference for another system; nonunique and not an idempotency key. |
+| `discoverability` | string | No | `listed` by default, or `unlisted` to omit the market from discovery while retaining exact-ID access. Unlisted is not private. |
 | `principalId` | string | Yes | Principal creating the market. |
 | `authorityRef` | string | No | Delegation identifier when the authenticated actor represents another principal. |
 | `subject.schema` | string | Yes | Versioned client-defined subject schema identifier. |
@@ -144,6 +150,9 @@ journal entries.
 | `funding.mode` | string | No | `none` or `reserve_on_submission`. Defaults to `none`; use `none` for the first launch. |
 | `funding.acceptedRailIds` | string[] | For funded markets | Nonempty allowlist of configured rails. |
 | `funding.settlementGraceSeconds` | integer | For funded markets | Positive settlement delivery window. |
+
+Ambient assigns the canonical `marketId` and returns it with the draft. Use
+that returned identifier for publication and every later market operation.
 
 `direct-claim.v1` configuration:
 
@@ -185,6 +194,20 @@ for complete examples and response fields.
 | `authorityRef` | string | No | Delegation identifier when actor and principal differ. |
 
 Returns `MarketResult`. See [Publish a market draft](/api-reference/markets/publish-a-market-draft).
+
+### `cancel_market`
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `commandId` | string | Yes | Actor-scoped idempotency key. |
+| `marketId` | string | Yes | Open market to cancel. |
+| `expectedVersion` | integer | Yes | Current market version. |
+| `principalId` | string | Yes | Creator principal authorizing cancellation. |
+| `authorityRef` | string | No | Delegation with `market:cancel` scope when actor and principal differ. |
+
+Cancellation is deliberately narrow in v0: the market must be unfunded and
+must have no accepted claim, bid, or offer. It remains publicly readable as a
+terminal audit record, and any scheduled auction or RFO close is canceled.
 
 ## Read a market
 

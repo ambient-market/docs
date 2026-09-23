@@ -13,24 +13,24 @@
     "groups": [
       {
         "group": "Get started",
-        "pages": ["overview", "quickstart"]
+        "pages": ["overview", "quickstart", "integrate/mcp", "integrate/environments"]
       },
       {
-        "group": "Guides",
-        "pages": ["buyer-onboarding", "seller-onboarding"]
-      },
-      {
-        "group": "Core concepts",
+        "group": "Integrate",
         "pages": [
-          "concepts",
+          "integrate/onboarding",
+          "seller-onboarding",
+          "buyer-onboarding",
           {
             "group": "Market mechanisms",
             "pages": ["mechanisms", "direct-claim", "sealed-auction", "request-for-offers"]
           },
-          "records",
-          "authentication",
-          "payments"
+          "records"
         ]
+      },
+      {
+        "group": "Core concepts",
+        "pages": ["concepts", "authentication"]
       },
       {
         "group": "Reference",
@@ -42,6 +42,10 @@
           },
           "mcp-tools"
         ]
+      },
+      {
+        "group": "Experimental",
+        "pages": ["payments"]
       }
     ]
   },

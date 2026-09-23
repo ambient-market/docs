@@ -45,22 +45,125 @@ tags:
   - name: System
     description: Check service health.
 paths:
-  /healthz:
+  /livez:
     get:
       tags: [System]
-      operationId: getHealth
-      summary: Check service health
-      description: Returns process health. This endpoint does not require authentication.
+      operationId: getLiveness
+      summary: Check process liveness
+      description: Returns process liveness without checking dependencies. This endpoint does not require authentication.
       security: []
       responses:
         "200":
-          description: The API process is healthy.
+          description: The API process is alive.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthResponse"
               example:
                 status: ok
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+
+  /readyz:
+    get:
+      tags: [System]
+      operationId: getReadiness
+      summary: Check service readiness
+      description: Verifies PostgreSQL connectivity and that the schema required by this API binary has been applied. This endpoint does not require authentication.
+      security: []
+      responses:
+        "200":
+          description: The API is ready to receive traffic.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: ready
+        "503":
+          description: The API is not ready to receive traffic.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: unavailable
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+
+  /healthz:
+    get:
+      tags: [System]
+      operationId: getHealth
+      summary: Check service readiness (compatibility alias)
+      description: Compatibility alias for /readyz. New probes should use /readyz.
+      security: []
+      responses:
+        "200":
+          description: The API is ready to receive traffic.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: ready
+        "503":
+          description: The API is not ready to receive traffic.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: unavailable
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+
+  /ops/healthz:
+    get:
+      tags: [System]
+      operationId: getOperationalHealth
+      summary: Check worker and durable-queue health
+      description: Returns aggregate worker freshness and deadline, payment, and payment-feedback queue health. Requires the independent operations token and exposes no job payloads or resource identifiers.
+      security:
+        - AmbientOperations: []
+      responses:
+        "200":
+          description: The workflow worker and durable queues are healthy.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          description: The worker is stale, a queue is lagging or terminally failed, or health collection failed.
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+
+  /ops/metrics:
+    get:
+      tags: [System]
+      operationId: getOperationalMetrics
+      summary: Scrape bounded application metrics
+      description: Returns Prometheus text metrics with fixed-cardinality labels for HTTP traffic, SQL pool pressure, worker freshness, and durable queues. Requires the independent operations token.
+      security:
+        - AmbientOperations: []
+      responses:
+        "200":
+          description: Metrics were collected successfully.
+          content:
+            text/plain:
+              schema:
+                type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          description: Database-backed metric collection failed; process and pool metrics remain in the response.
+          content:
+            text/plain:
+              schema:
+                type: string
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
 
@@ -635,7 +738,8 @@ paths:
       summary: Create a market draft
       description: |
         Creates an inactive draft from a subject and a supported mechanism.
-        Review the returned normalized configuration and version before publishing.
+        Ambient assigns the canonical market identifier. Review the returned
+        identifier, normalized configuration, and version before publishing.
       requestBody:
         required: true
         content:
@@ -647,7 +751,7 @@ paths:
                 summary: Posted-price direct claim
                 value:
                   commandId: table-create-1
-                  marketId: table-2026-09-19-1900
+                  externalRef: table-2026-09-19-1900
                   principalId: restaurant-1
                   subject:
                     schema: restaurant-table.v1
@@ -668,7 +772,7 @@ paths:
                 summary: Sealed second-price auction
                 value:
                   commandId: table-auction-create-1
-                  marketId: table-auction-2026-09-19-1900
+                  externalRef: table-auction-2026-09-19-1900
                   principalId: restaurant-1
                   subject:
                     schema: restaurant-table.v1
@@ -728,6 +832,47 @@ paths:
       responses:
         "200":
           description: Market published.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/markets/{marketId}/cancel:
+    post:
+      tags: [Markets]
+      operationId: cancelMarket
+      summary: Cancel a market before participation
+      description: |
+        Terminates an open, unfunded market only when no claim, bid, offer, or
+        commitment has been accepted. The market remains publicly readable as
+        a terminal audit record. A delegated actor needs market:cancel scope.
+      parameters:
+        - $ref: "#/components/parameters/MarketId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelMarketRequest"
+            example:
+              commandId: table-cancel-1
+              expectedVersion: 2
+              principalId: restaurant-1
+      responses:
+        "200":
+          description: Market canceled.
           content:
             application/json:
               schema:
@@ -1212,6 +1357,10 @@ components:
       type: http
       scheme: bearer
       description: Short-lived opaque token issued after Ed25519 actor-key proof.
+    AmbientOperations:
+      type: http
+      scheme: bearer
+      description: Independent high-entropy operations token used only by protected health and metrics monitors.
 
   parameters:
     ReadPrincipalId:
@@ -1280,7 +1429,7 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
     Unauthorized:
-      description: HMAC authentication failed.
+      description: Request authentication failed.
       content:
         application/json:
           schema:
@@ -1593,8 +1742,11 @@ components:
       enum:
         - market:create
         - market:publish
+        - market:cancel
         - market:claim
         - market:bid
+        - market:offer_submit
+        - market:offer_select
         - commitment:confirm
         - commitment:decline
         - commitment:refund
@@ -1918,14 +2070,16 @@ components:
     CreateMarketRequest:
       type: object
       additionalProperties: false
-      required: [commandId, marketId, principalId, subject, mechanism]
+      required: [commandId, principalId, subject, mechanism]
       properties:
         commandId:
           $ref: "#/components/schemas/CommandId"
-        marketId:
+        externalRef:
           type: string
-          minLength: 1
-          description: Client-selected unique market identifier.
+          maxLength: 256
+          description: Optional creator-private correlation reference. It is not unique and is not an idempotency key.
+        discoverability:
+          $ref: "#/components/schemas/MarketDiscoverability"
         principalId:
           $ref: "#/components/schemas/PrincipalId"
         authorityRef:
@@ -1955,6 +2109,23 @@ components:
           type: string
           minLength: 1
           description: Credential presented when a configured publication-admission rule matches the subject schema.
+        principalId:
+          $ref: "#/components/schemas/PrincipalId"
+        authorityRef:
+          $ref: "#/components/schemas/AuthorityRef"
+
+    CancelMarketRequest:
+      type: object
+      additionalProperties: false
+      required: [commandId, expectedVersion, principalId]
+      properties:
+        commandId:
+          $ref: "#/components/schemas/CommandId"
+        expectedVersion:
+          type: integer
+          format: uint64
+          minimum: 1
+          description: Current open-market version returned by Ambient.
         principalId:
           $ref: "#/components/schemas/PrincipalId"
         authorityRef:
@@ -2415,14 +2586,25 @@ components:
           minLength: 1
           description: Delegation used when actorId and principalId differ.
 
+    MarketDiscoverability:
+      type: string
+      enum: [listed, unlisted]
+      default: listed
+      description: Listed markets appear in public discovery. Unlisted markets remain readable by exact market ID and are not private.
+
     Market:
       type: object
       additionalProperties: false
-      required: [id, version, state, creator, subject, mechanism, mechanismState, funding, createdAt, updatedAt]
+      required: [id, version, state, discoverability, creator, subject, mechanism, mechanismState, funding, createdAt, updatedAt]
       properties:
         id:
           type: string
           minLength: 1
+          description: Canonical identifier assigned by Ambient when the draft is created.
+        externalRef:
+          type: string
+          maxLength: 256
+          description: Optional creator-private correlation reference supplied at creation. Omitted from public market views.
         version:
           type: integer
           format: uint64
@@ -2430,7 +2612,9 @@ components:
           description: Monotonically increasing version used for optimistic concurrency.
         state:
           type: string
-          enum: [draft, open, closed]
+          enum: [draft, open, closed, canceled]
+        discoverability:
+          $ref: "#/components/schemas/MarketDiscoverability"
         creator:
           $ref: "#/components/schemas/CommandIdentity"
         subject:
@@ -2475,7 +2659,7 @@ components:
     PublicMarket:
       type: object
       additionalProperties: false
-      required: [id, version, state, creatorPrincipalId, subject, mechanism, mechanismState, funding, publicationVerified, createdAt, updatedAt]
+      required: [id, version, state, discoverability, creatorPrincipalId, subject, mechanism, mechanismState, funding, publicationVerified, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -2486,7 +2670,9 @@ components:
           minimum: 1
         state:
           type: string
-          enum: [open, closed]
+          enum: [open, closed, canceled]
+        discoverability:
+          $ref: "#/components/schemas/MarketDiscoverability"
         creatorPrincipalId:
           type: string
           minLength: 1
@@ -2979,6 +3165,7 @@ components:
           enum:
             - market.draft_created
             - market.published
+            - market.canceled
             - direct_claim.accepted
             - sealed_auction.bid_submitted
             - sealed_auction.resolved
@@ -3021,6 +3208,7 @@ components:
           oneOf:
             - $ref: "#/components/schemas/MarketDraftCreatedEventData"
             - $ref: "#/components/schemas/MarketPublishedEventData"
+            - $ref: "#/components/schemas/MarketCanceledEventData"
             - $ref: "#/components/schemas/DirectClaimAcceptedEventData"
             - $ref: "#/components/schemas/SealedBidSubmittedEventData"
             - $ref: "#/components/schemas/SealedAuctionResolution"
@@ -3031,8 +3219,10 @@ components:
     MarketDraftCreatedEventData:
       type: object
       additionalProperties: false
-      required: [creator, subject, mechanism, mechanismState]
+      required: [discoverability, creator, subject, mechanism, mechanismState]
       properties:
+        discoverability:
+          $ref: "#/components/schemas/MarketDiscoverability"
         creator:
           $ref: "#/components/schemas/CommandIdentity"
         subject:
@@ -3060,6 +3250,18 @@ components:
         publicationCredentialId:
           type: string
           minLength: 1
+
+    MarketCanceledEventData:
+      type: object
+      additionalProperties: false
+      required: [previousState, state]
+      properties:
+        previousState:
+          type: string
+          const: open
+        state:
+          type: string
+          const: canceled
 
     DirectClaimAcceptedEventData:
       type: object
@@ -3233,6 +3435,7 @@ components:
           enum:
             - market.create_draft
             - market.publish
+            - market.cancel
             - direct_claim.submit
             - sealed_auction.submit_bid
             - sealed_auction.resolve

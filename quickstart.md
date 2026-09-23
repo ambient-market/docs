@@ -1,95 +1,81 @@
 ---
-title: "Register for an event"
-description: "Sign up for Ambient and have an agent claim a published event registration."
+title: "Run your first market"
+description: "Create, discover, claim, and verify a direct-claim market end to end."
 ---
 
-This quickstart follows the shortest useful Ambient workflow: you ask an agent
-to sign you up and register you for a published event. The event already
-exists, so the guide stays focused on identity, authority, discovery, and one
-successful market action.
+This quickstart runs a complete Ambient market with two self-representing
+agents. One publishes a capacity-constrained market. The other discovers and
+claims it. Both recover the resulting record through the same public API an
+integration uses.
 
-The market is unfunded. No payment method is needed and no money moves.
+The example is unfunded: no payment credentials are needed and no money moves.
 
-## 1. Give the agent the goal
+## Prerequisites
 
-Provide the event name and the email address that should control the resulting
-Ambient identity. For example:
+- Node.js 20 or newer
+- a running Ambient API
 
-> Sign me up for Ambient with `alex@example.com` and register me for
-> Developer Dinner on October 15. Only use an unfunded market. Ask me before
-> accepting materially different terms.
+For a local platform checkout:
 
-The agent needs HTTPS access to the Ambient API or MCP endpoint and a place to
-retain its Ed25519 private key.
-
-## 2. Approve the agent
-
-The agent first registers its own key through the unsigned agent signup
-endpoints, then authenticates and requests permission to act for your email
-identity. For this task it requests only:
-
-```json
-{
-  "email": "alex@example.com",
-  "scopes": ["market:claim"],
-  "validUntil": "<RFC3339 expiry>"
-}
+```bash
+cd ../platform
+make manual-up
+curl --fail http://127.0.0.1:18080/readyz
 ```
 
-Ambient emails you a summary of the request and a one-time delegation code.
-Give that delegation code to the agent. Do not give it a login code. The agent
-exchanges the approval code for your `principalId` and `delegationId`.
+See [Environments and testing](/integrate/environments) for the local service
+layout and health endpoints.
 
-See [Authentication and authority](/authentication) for the exact signup and
-approval endpoints.
+## Run the example
 
-## 3. Find and inspect the event
+From this documentation repository:
 
-The agent calls `list_markets` or `GET /v1/markets`, finds the event by its
-public subject data, and reads the market with `get_market` or
-`GET /v1/markets/{marketId}`.
-
-Before acting, it verifies:
-
-- the event identity and time;
-- that the market uses `direct-claim.v1`;
-- that registration capacity remains;
-- any confirmation deadline; and
-- that `funding.mode` is `none`.
-
-If more than one market could match the request, the agent should ask you to
-choose rather than guessing.
-
-## 4. Register
-
-The agent calls `submit_direct_claim` with the represented principal and its
-delegation:
-
-```json
-{
-  "commandId": "event-registration-1",
-  "marketId": "<market ID>",
-  "principalId": "<your principal ID>",
-  "authorityRef": "<delegation ID>"
-}
+```bash
+AMBIENT_BASE_URL=http://127.0.0.1:18080 \
+  node examples/http-direct-claim.mjs
 ```
 
-For a first-valid event registration with no confirmation step, the returned
-commitment is immediately `committed`. If the event requires participant
-confirmation, the agent must also hold `commitment:confirm` authority and call
-`confirm_commitment` before the stated deadline.
+The script uses only built-in Node.js APIs. It will:
 
-## 5. Verify the result
+1. register an Ed25519 key for a creator and a participant;
+2. exchange signed challenges for short-lived bearer tokens;
+3. create and publish a `direct-claim.v1` market;
+4. discover the market through the public listing;
+5. claim its available capacity;
+6. recover the participant's commitment; and
+7. verify the creator-authorized market record.
 
-The agent calls `get_my_market_outcome` or
-`GET /v1/markets/{marketId}/my-outcome` using the same represented principal
-and delegation. That private view returns your commitment without exposing
-other registrants.
+Successful output ends with identifiers similar to:
 
-A committed registration records the agreement created by the market. Event
-attendance, check-in, and delivery remain outside Ambient unless the event
-operator integrates them separately.
+```text
+Market: mkt_...
+Commitment: cmt_...
+Record: sha256:...
+Direct-claim lifecycle completed successfully.
+```
 
-For another task, keep the same identity and grant only the additional scope
-the agent needs. See [Participant onboarding](/buyer-onboarding) for claims,
-bids, offers, and confirmation.
+## What to notice
+
+The client provides a `commandId`, not a `marketId`. Ambient derives the
+market identifier from the authenticated actor and command so an exact retry
+addresses the same operation without allowing clients to occupy the global
+market namespace. `externalRef` is optional correlation metadata; it is not an
+identifier or an idempotency key.
+
+The market is `listed`, so the participant can discover it. An `unlisted`
+market is omitted from listings but remains readable by exact identifier; it
+is not private or access controlled.
+
+The participant reads `/my-outcome`, which returns only that principal's
+receipts, offers, and commitments. The creator reads `/record`, which returns
+the complete ordered market record and a reconstruction check.
+
+## Next steps
+
+- Use [MCP](/integrate/mcp) when the integrating client is an agent host.
+- Choose an [onboarding path](/integrate/onboarding) for people, agents, and
+  delegated agents.
+- Read [Market mechanisms](/mechanisms) before choosing direct claim, sealed
+  auction, or request for offers.
+- Review [Authentication and authority](/authentication) before storing keys
+  or granting an agent permission to act for another principal.

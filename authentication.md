@@ -147,7 +147,7 @@ Content-Type: application/json
   "delegationId": "delegation-1",
   "principalId": "restaurant-1",
   "delegateActorId": "restaurant-agent-1",
-  "scopes": ["market:create", "market:publish"],
+  "scopes": ["market:create", "market:publish", "market:cancel"],
   "validUntil": "2030-10-01T00:00:00Z"
 }
 ```
@@ -305,7 +305,9 @@ Sign the exact serialized body that is transmitted. Reformatting JSON after
 signing changes its hash and invalidates the request. Requests outside the
 deployment's configured clock-skew window are rejected.
 
-`GET /healthz` and the two `/v1/auth/*` proof routes are unsigned.
+`GET /livez`, `GET /readyz`, the compatibility alias `GET /healthz`, and the
+two `/v1/auth/*` proof routes are unsigned. Readiness verifies PostgreSQL
+connectivity and the schema version required by the running API.
 
 ## Bootstrap MCP bearer tokens
 
