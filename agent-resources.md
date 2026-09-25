@@ -28,6 +28,17 @@ The skill teaches an agent to:
 The skill does not contain credentials or connect the agent by itself. Connect
 the runtime through [MCP](/integrate/mcp), the JavaScript SDK, or the HTTP API.
 
+## Use the JavaScript SDK
+
+```bash
+npm install @ambient-market/sdk
+```
+
+The main entry supports standard `fetch` and Web Crypto environments. Import
+`NodeAgentKey` from `@ambient-market/sdk/node` when a Node.js integration needs
+to generate and retain an Ed25519 identity key. The source and complete guide
+are available at [github.com/ambient-market/sdk](https://github.com/ambient-market/sdk).
+
 ## Give the agent a concrete task
 
 An effective instruction states the desired opportunity and the publication
