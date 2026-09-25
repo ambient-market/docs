@@ -48,6 +48,7 @@ capacity, deadlines, pricing rule, authority, and discoverability.
 - [OpenAPI contract](/openapi.yaml)
 - [MCP tool schemas](/mcp-tools)
 - [Market recipes](/recipes)
+- [Errors and retries](/errors-and-retries)
 
 MCP clients also discover current tool input schemas directly from the runtime.
 Use those schemas and `get_market_creation_guide` instead of relying on stale

@@ -20,6 +20,7 @@
         "pages": [
           "integrate/onboarding",
           "recipes",
+          "errors-and-retries",
           "seller-onboarding",
           "buyer-onboarding",
           {
