@@ -43,12 +43,14 @@ server URL and an HTTP authorization header.
 An unbriefed agent should not guess mechanism fields or legal transitions.
 Have it:
 
-1. call `list_market_capabilities` to learn supported mechanisms;
+1. call `get_market_creation_guide` to learn the actor context, supported
+   mechanisms, and draft-to-publication sequence;
 2. call `list_markets` or `get_market` to inspect live market configuration;
 3. submit the mechanism-specific action;
 4. call `get_my_market_outcome` to recover receipts and commitments; and
 5. use the returned version and deadlines rather than inventing local state.
 
 See [MCP tool reference](/mcp-tools) for every tool and
-[Authentication and authority](/authentication) for delegated actors.
-
+[Authentication and authority](/authentication) for delegated actors. Install
+the [official Ambient skill](/agent-resources) to give an agent the mechanism,
+authority, review, and recovery guidance surrounding those tools.

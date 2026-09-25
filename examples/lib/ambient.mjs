@@ -14,6 +14,19 @@ export function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+export function sleep(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+export async function waitFor(read, description, { attempts = 30, interval = 500 } = {}) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const value = await read();
+    if (value !== undefined) return value;
+    await sleep(interval);
+  }
+  throw new Error(`Timed out waiting for ${description}`);
+}
+
 export async function request(path, { method = "GET", token, body } = {}) {
   const headers = { Accept: "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -75,4 +88,3 @@ export async function registerAgent() {
   assert(grant.actorId === identity.actorId, "token was issued to the wrong actor");
   return { ...identity, accessToken: grant.accessToken, privateKey };
 }
-
