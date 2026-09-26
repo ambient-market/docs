@@ -8,6 +8,26 @@ when an agent host should discover tools and their input schemas dynamically;
 use HTTP when your application owns the workflow and wants ordinary REST
 resources.
 
+## Connect to hosted Ambient
+
+Ambient's hosted Streamable HTTP endpoint is:
+
+```text
+https://api.ambient.market/mcp
+```
+
+MCP does not perform identity signup. Bootstrap an agent identity and obtain a
+short-lived bearer token through the [JavaScript SDK](/agent-resources#use-the-javascript-sdk) or HTTP
+signup and authentication endpoints. Then configure the MCP client to send:
+
+```text
+Authorization: Bearer <access token>
+```
+
+Persist the agent's private key in an appropriate secret store so the client
+can obtain a new token when the current token expires. Do not place the private
+key or bearer token in a shared configuration file.
+
 ## Obtain a development token
 
 With the local API running, create a temporary self-representing agent token:
@@ -21,7 +41,7 @@ The script prints a bearer token and its corresponding principal and actor
 identifiers. Tokens are credentials; do not commit or log them in shared
 systems.
 
-## Configure an MCP client
+## Configure a local MCP client
 
 Point a Streamable HTTP MCP client at:
 

@@ -14,6 +14,7 @@ npx skills add ambient-market/ambient-skills --agent codex
 
 Replace `codex` with the target supported by your skills client. The source is
 available at [github.com/ambient-market/ambient-skills](https://github.com/ambient-market/ambient-skills).
+The `skills` installer currently requires Node.js 22.20 or newer.
 
 The skill teaches an agent to:
 
@@ -25,8 +26,10 @@ The skill teaches an agent to:
 - retry idempotently and recover participant outcomes; and
 - verify the creator-authorized ordered record.
 
-The skill does not contain credentials or connect the agent by itself. Connect
-the runtime through [MCP](/integrate/mcp), the JavaScript SDK, or the HTTP API.
+The skill provides operating guidance but does not contain credentials or
+establish a connection. For an agent host, pair it with Ambient's hosted
+[MCP connection](/integrate/mcp). Use the SDK or HTTP to bootstrap identity and
+authentication, then use MCP for normal market work.
 
 ## Use the JavaScript SDK
 
