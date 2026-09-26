@@ -33,6 +33,7 @@ and audit behavior.
 | `get_payment_operation` | `PaymentOperationView` | Poll a payment operation queued by the authenticated actor. |
 | `register_payee_rail` | `PayeeRailRegistrationView` | Currently rejects new bindings pending verified Connect onboarding; operator bootstrap remains available over HTTP. |
 | `submit_direct_claim` | `MarketActionResult` | Claim direct-claim capacity in server order. |
+| `close_direct_claims` | `MarketActionResult` | Stop future claims while preserving accepted commitments. |
 | `submit_sealed_bid` | `MarketActionResult` | Submit one private auction bid and receive an amount-free receipt. |
 | `submit_offer` | `MarketActionResult` | Submit a private RFO offer and receive a receipt. |
 | `withdraw_offer` | `MarketActionResult` | Withdraw your own active RFO offer before close. |
@@ -164,6 +165,7 @@ that returned identifier for publication and every later market operation.
 | `pricing.currency` | string | For `posted` | Three-letter uppercase currency. |
 | `confirmation` | string | Yes | `none` commits the first valid claim immediately. `creator` gives it an exclusive hold pending creator acceptance (request to book). `participant` and `both` are also accepted commitment policies. |
 | `holdDurationSeconds` | integer | When confirmation is required | Positive confirmation period. Omit or send `0` when confirmation is `none`. |
+| `claimsCloseAt` | RFC 3339 timestamp | No | Fixed claim cutoff after publication. Claims at or after it are rejected. |
 
 `sealed-forward-auction.v1` configuration:
 
@@ -249,6 +251,14 @@ delivery URI. Ambient records the handoff and correlation commitment ID but
 does not invoke endpoints or deliver the result.
 
 Returns `MarketActionResult`. See [Submit a direct claim](/api-reference/participation/submit-a-direct-claim).
+
+### `close_direct_claims`
+
+The market creator stops further participation in an open
+`direct-claim.v1` market without canceling or removing commitments already
+accepted. Requires `commandId`, `marketId`, and `principalId`; a delegated
+actor also supplies an `authorityRef` with `market:cancel` scope. Returns
+`MarketActionResult` with the closed market and its journaled close event.
 
 ### `submit_sealed_bid`
 

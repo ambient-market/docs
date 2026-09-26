@@ -17,6 +17,7 @@ The creator defines:
 | `pricing` | `free` or a posted amount and currency. |
 | `confirmation` | Whether the creator, participant, both, or neither must confirm. |
 | `holdDurationSeconds` | Time allowed for required confirmations. |
+| `claimsCloseAt` | Optional fixed cutoff for accepting claims. |
 
 With `confirmation: none`, an accepted claim commits immediately. With
 `confirmation: creator`, the first valid claimant holds capacity while the
@@ -35,6 +36,13 @@ creator approves or declines. This is the request-to-book shape.
 Claims may omit `expectedVersion`. Ambient then orders concurrent claims by
 authoritative server arrival. When a held claim is declined or expires, its
 capacity becomes available again.
+
+When `claimsCloseAt` is present, publication schedules a durable close and the
+kernel rejects claims exactly at or after the cutoff even if the worker is
+delayed. The creator can also call `close_direct_claims` or
+`POST /v1/markets/{marketId}/claim-closures` to stop future claims while
+preserving commitments already accepted. This is distinct from canceling an
+unparticipated market.
 
 ## Private handoff data
 

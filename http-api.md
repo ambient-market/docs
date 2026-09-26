@@ -63,6 +63,7 @@ not send `occurredAt` or `actorId`.
 | `POST` | `/v1/markets/{marketId}/publish` | Publish a reviewed draft. |
 | `POST` | `/v1/markets/{marketId}/cancel` | Cancel an open, unfunded market before any participation is accepted. |
 | `POST` | `/v1/markets/{marketId}/direct-claims` | Claim direct-claim capacity. |
+| `POST` | `/v1/markets/{marketId}/claim-closures` | Stop future direct claims while preserving accepted commitments. |
 | `POST` | `/v1/markets/{marketId}/sealed-bids` | Submit one private sealed bid. |
 | `POST` | `/v1/markets/{marketId}/offers` | Submit a private RFO offer and receive a receipt. |
 | `GET` | `/v1/markets/{marketId}/offers` | Read public RFO state and offers scoped to the currently authorized principal. |
