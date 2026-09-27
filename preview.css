@@ -1,0 +1,35 @@
+/* Keep release status beside the existing text wordmark on every docs page. */
+#navbar .nav-logo:not(img) {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#navbar .nav-logo:not(img)::after {
+  content: "Developer preview";
+  display: inline-block;
+  padding: 5px 9px;
+  border-radius: 2px;
+  background: #7de0b0;
+  color: #071d17;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: normal;
+  white-space: nowrap;
+}
+
+@media (max-width: 1023px) {
+  #navbar .nav-logo:not(img) {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 20px;
+    line-height: 1.2;
+  }
+
+  #navbar .nav-logo:not(img)::after {
+    padding: 3px 7px;
+  }
+}
