@@ -19,6 +19,7 @@
         "group": "Integrate",
         "pages": [
           "integrate/onboarding",
+          "oauth-connections",
           "recipes",
           "errors-and-retries",
           "seller-onboarding",

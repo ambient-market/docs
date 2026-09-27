@@ -10,6 +10,10 @@ agent handles the API or MCP workflow.
 The first launch uses unfunded markets. Prices and bids may be recorded as
 terms, but the creator does not need payment onboarding yet.
 
+The steps below use key-based agent signup and email-approved delegation.
+With a registered application, you can instead establish authority through an
+[OAuth browser connection](/oauth-connections), then continue with market creation.
+
 ## 1. Ask the agent to create your Ambient identity
 
 Give the agent your email address and the task it should perform. For example:

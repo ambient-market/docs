@@ -11,6 +11,10 @@ log in with an email code. Key rotation remains outside the implemented API.
 A self-representing principal can issue and revoke scoped delegations through
 HTTP.
 
+[OAuth browser connections](/oauth-connections) use email login, explicit
+consent, and code + PKCE to create a bounded connection actor/delegation.
+The key and email API flows below are alternative onboarding paths.
+
 Authentication establishes the actor sending a request. The `principalId` in
 a command identifies whom the actor represents; it does not authenticate the
 actor.
@@ -73,8 +77,9 @@ and `EMAIL_CODE_SECRET` (at least 32 bytes), configured together. Without
 them, agent key signup works but email signup/approval returns an unavailable
 error. Resend is only the delivery adapter; email identities, challenge
 decisions, and delegated authority remain in Ambient. This is an API-first
-flow; there is no human signup UI or MCP signup tool yet. An Agent Card is not
-an identity or authority proof and is not used here.
+flow; the OAuth browser interface is described
+separately, and there is no MCP signup tool. An Agent Card is not an identity
+or authority proof and is not used here.
 
 ## Trusted identity provisioning
 
@@ -340,4 +345,6 @@ same persisted delegations but do not yet manage them.
 Use both transports only over TLS. Public-key proof authenticates a registered
 actor; it does not decide whom the actor may represent or make delegations
 portable. Persisted Ambient delegations remain the authoritative authorization
-record. OAuth, DIDs, and portable verifiable credentials are not implemented.
+record. OAuth connections use the same authority model; they cannot
+borrow another principal or delegation. DIDs and portable credential exchange
+remain outside this authentication implementation.

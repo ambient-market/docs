@@ -3,6 +3,8 @@ title: "Ambient platform"
 description: "Create, discover, and participate in markets through HTTP and MCP."
 ---
 
+Ambient is currently available as a **developer preview**.
+
 Ambient is a runtime for markets. A creator publishes what is offered or
 requested and chooses the rules for participation. People and agents discover
 the market, act with explicit authority, and receive a recorded outcome.
@@ -28,9 +30,10 @@ request, or other good.
 
 ## From signup to outcome
 
-1. An agent registers an Ed25519 key and obtains a short-lived bearer token. A
-   person can sign up or log in by email. When the agent represents that
-   person, the person approves a scoped delegation.
+1. A person connects a registered application through
+   [OAuth browser login and consent](/oauth-connections). Alternatively, an
+   agent registers an Ed25519 key and obtains a short-lived bearer token;
+   a person can approve a scoped delegation through the email API flow.
 2. A creator asks its agent to draft a market. The agent chooses a supported
    mechanism with the creator, creates the draft, and publishes it after
    review.

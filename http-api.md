@@ -18,6 +18,11 @@ fields, constraints, request examples, response schemas, and status codes for
 each operation. The complete machine-readable contract is also available as
 [OpenAPI YAML](/openapi.yaml).
 
+The [OAuth connection endpoints](/oauth-connections) are documented separately.
+The OpenAPI contract describes bearer authentication for market requests;
+OAuth discovery, consent, and token exchange use the separate authorization
+endpoints. The resulting access token authenticates HTTP and MCP requests.
+
 Listed published-market discovery, exact-ID snapshots, and public activity are
 unsigned. An unlisted market is omitted from discovery but remains readable by
 exact ID; unlisted is not an access-control boundary.

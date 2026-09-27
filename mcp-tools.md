@@ -5,10 +5,15 @@ description: "Connect to Ambient through MCP and use the implemented market tool
 
 Ambient exposes a stateless Streamable HTTP MCP endpoint at `POST /mcp` using
 the official Go SDK. Connect with a short-lived bearer token obtained through
-Ed25519 actor proof or configured human email login, or use a bootstrap static
+OAuth consent, Ed25519 actor proof, or configured human email login, or use a bootstrap static
 token in a controlled deployment, as described in [Authentication](/authentication).
 The first launch supports unfunded markets across all three presets. Payment
 tools describe an implemented integration path, not a live payment offering.
+
+For [OAuth connections](/oauth-connections), `get_actor_context` and
+`get_market_creation_guide` additionally return the connection's approved
+`principalId` and `authorityRef`. Use those values instead of self-representing
+as the connection actor. All paths use bearer tokens for MCP requests.
 
 MCP is a transport adapter, not a separate market runtime. Its tools call the
 same command and query services as HTTP and therefore share authority,
@@ -19,7 +24,7 @@ and audit behavior.
 
 | Tool | Result | Purpose |
 | --- | --- | --- |
-| `get_actor_context` | `{actorId}` | Read the identity established by the authenticated connection. |
+| `get_actor_context` | `{actorId, principalId?, authorityRef?}` | Read the authenticated actor; OAuth connections also identify the approved principal and delegation. |
 | `get_market_creation_guide` | `MarketCreationGuide` | Read the authenticated actor ID, supported preset rules, and draft-to-publication sequence. |
 | `create_market` | `MarketResult` | Create a reviewed but unpublished market draft. |
 | `publish_market` | `MarketResult` | Open a draft market. |

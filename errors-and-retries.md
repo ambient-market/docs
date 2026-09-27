@@ -19,6 +19,16 @@ failure. Clients should branch on the code, not the message.
 | Ambient rejected the market action | Do not loop. Use the stable code to identify the missing authority, invalid transition, exhausted capacity, invalid configuration, or other required correction. |
 | The same command ID was used for different content | Stop. Generate a new command ID for the genuinely new request. |
 
+## Authentication exchanges
+
+The retry advice above applies to market commands, not one-use authentication
+proofs. With [OAuth connections](/oauth-connections), a consumed code
+or refresh-token replay revokes its token family. Renew using the current
+refresh token, or reconnect if the exchange result was lost. Reconnecting
+creates a new actor/grant, so recover an uncertain market outcome before
+resubmitting; the old actor's command ID does not provide deduplication for
+the new actor.
+
 ## Preserve idempotency
 
 A command ID belongs to one authenticated actor and one exact request. Reusing

@@ -28,8 +28,10 @@ The skill teaches an agent to:
 
 The skill provides operating guidance but does not contain credentials or
 establish a connection. For an agent host, pair it with Ambient's hosted
-[MCP connection](/integrate/mcp). Use the SDK or HTTP to bootstrap identity and
-authentication, then use MCP for normal market work.
+[MCP connection](/integrate/mcp). Connect a registered application through
+[OAuth](/oauth-connections), or use the SDK or HTTP for key-based identity and
+authentication, then use MCP for normal market work. Installing the skill
+does not establish a connection or register an OAuth client.
 
 ## Use the JavaScript SDK
 
@@ -41,6 +43,11 @@ The main entry supports standard `fetch` and Web Crypto environments. Import
 `NodeAgentKey` from `@ambient-market/sdk/node` when a Node.js integration needs
 to generate and retain an Ed25519 identity key. The source and complete guide
 are available at [github.com/ambient-market/sdk](https://github.com/ambient-market/sdk).
+
+The SDK accepts an externally obtained bearer token with `withToken`, but does
+not perform OAuth discovery, consent, exchange, refresh, or disconnect. Bind
+the approved principal and grant explicitly with
+`forPrincipal(principalId, authorityRef)`; do not infer them from the token.
 
 ## Give the agent a concrete task
 

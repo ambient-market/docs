@@ -50,6 +50,14 @@ A delegation is not a login session. It is an explicit, expiring mandate. A
 payment mandate can additionally restrict rail, currency, amount per
 authorization, payee, and market.
 
+## OAuth connection
+
+With an [OAuth browser connection](/oauth-connections), the person
+enters the login code on Ambient's page and approves an application; the agent
+receives scoped access, not the person's code or self-representing session.
+The connecting application must be registered with Ambient and handle
+authorization code + S256 PKCE. Key-based flows above remain available.
+
 ## Business and credential-gated actions
 
 Identity proves who authenticated. It does not by itself prove that an actor
