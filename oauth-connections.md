@@ -3,7 +3,7 @@ title: "OAuth connections"
 description: "Connect an application with browser email login, scoped consent, and authorization code + PKCE."
 ---
 
-Use OAuth to connect a registered application on a person's behalf through
+Use OAuth to connect an application on a person's behalf through
 browser email login and explicit consent. Connect to Ambient at
 `https://api.ambient.market/mcp`; the client handles discovery and the browser
 authorization flow. See [MCP setup](/integrate/mcp) and the alternative
@@ -24,8 +24,9 @@ the actor may do. It does not verify a business or grant payment authority.
 
 1. The MCP client discovers the authorization server through the `401`
    challenge and `/.well-known/oauth-protected-resource/mcp` metadata.
-2. The application opens `/oauth/authorize` with its registered `client_id`,
-   exact `redirect_uri`, `response_type=code`, requested `scope`, random
+2. If it has no client ID, the client registers itself through the advertised
+   `registration_endpoint`. It then opens `/oauth/authorize` with its `client_id`,
+   registered `redirect_uri`, `response_type=code`, requested `scope`, random
    `state`, S256 PKCE challenge, and `resource=<issuer>/mcp`.
 3. The person enters their email and login code on Ambient's browser page.
    **The code stays between the person and Ambient, never in the agent chat.**
@@ -40,15 +41,39 @@ the actor may do. It does not verify a business or grant payment authority.
    returned principal and grant, not assume `principalId == actorId`.
 
 Use the discovered authorization-server metadata for endpoint URLs. The
-connecting application must be registered before starting authorization.
+client handles registration before starting authorization. The person does
+not need to find or enter a client ID or callback URL.
 
 ## Client registration and permissions
 
-Applications must be registered by the deployment operator with a client ID,
-display name, and exact callback URLs. A client ID identifies an application,
-not an individual user. The current integration supports public clients with
-PKCE; no client secret is issued. HTTPS callbacks are supported, plus HTTP
-callbacks to literal loopback addresses with an exact registered port/path.
+Ambient supports dynamic registration for public code + PKCE clients. The
+client submits its name and callback URLs and receives a client ID; no client
+secret or access permission is issued by registration. Operator-configured
+registrations also remain supported. A client ID identifies a registration,
+not an individual person or verified software publisher. Ambient labels
+self-registered application names as unverified on the consent screen.
+
+HTTPS callbacks must match exactly. HTTP callbacks are allowed only to literal
+loopback addresses; their listener port may vary, but address, path and query
+must match registration. Registration is rate- and capacity-limited.
+
+For Codex CLI, configure the remote server in `config.toml`:
+
+```toml
+[mcp_servers.ambient]
+url = "https://api.ambient.market/mcp"
+```
+
+Then start its built-in login with the scopes needed for your task:
+
+```bash
+codex mcp login ambient --scopes market:create,market:publish
+```
+
+The client handles discovery, registration, callback, and tokens. Sign in and
+approve in the browser; adjust scopes for the work you actually want to permit.
+`--no-browser` supports environments where the browser cannot return directly
+to the CLI. Follow its callback instructions without sharing the URL in chat.
 
 Supported scopes are `market:create`, `market:publish`, `market:cancel`,
 `market:claim`, `market:bid`, `market:offer_submit`, `market:offer_select`,
@@ -56,7 +81,7 @@ Supported scopes are `market:create`, `market:publish`, `market:cancel`,
 Payment, payee registration, credential issuance, and refund scopes are not
 available through this connection flow.
 
-There is no dynamic client registration, remote client metadata fetching,
+There is no remote client metadata fetching (CIMD),
 OpenID Connect ID token, or client-credentials grant. Token exchange has been
 tested from the client host; browser cross-origin token exchange is not a
 supported compatibility claim of this slice.

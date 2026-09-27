@@ -10,10 +10,11 @@ resources.
 
 ## Connect to hosted Ambient
 
-Use [OAuth browser consent](/oauth-connections) when connecting a registered
+Use [OAuth browser consent](/oauth-connections) when connecting an
 application on a person's behalf, or supply a bearer token obtained through
 key-based authentication. OAuth clients must support authorization code +
-S256 PKCE and have their exact callback URL registered with Ambient.
+S256 PKCE. Clients supporting dynamic registration, including Codex CLI, can
+register automatically; users do not supply application IDs or callbacks.
 
 Ambient's hosted Streamable HTTP endpoint is:
 
@@ -21,7 +22,7 @@ Ambient's hosted Streamable HTTP endpoint is:
 https://api.ambient.market/mcp
 ```
 
-For OAuth, let the registered client discover the authorization server and
+For OAuth, let the client discover the authorization server, register, and
 open Ambient's email login and consent page. After approval, the client sends
 the resulting bearer token with MCP requests. Login codes stay in the browser.
 

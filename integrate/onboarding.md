@@ -55,8 +55,9 @@ authorization, payee, and market.
 With an [OAuth browser connection](/oauth-connections), the person
 enters the login code on Ambient's page and approves an application; the agent
 receives scoped access, not the person's code or self-representing session.
-The connecting application must be registered with Ambient and handle
-authorization code + S256 PKCE. Key-based flows above remain available.
+The connecting application handles authorization code + S256 PKCE and can
+register automatically through discovery; the person need not provide a
+client ID or callback. Key-based flows above remain available.
 
 ## Business and credential-gated actions
 

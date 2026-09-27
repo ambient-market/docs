@@ -28,7 +28,7 @@ The skill teaches an agent to:
 
 The skill provides operating guidance but does not contain credentials or
 establish a connection. For an agent host, pair it with Ambient's hosted
-[MCP connection](/integrate/mcp). Connect a registered application through
+[MCP connection](/integrate/mcp). Connect an application through
 [OAuth](/oauth-connections), or use the SDK or HTTP for key-based identity and
 authentication, then use MCP for normal market work. Installing the skill
 does not establish a connection or register an OAuth client.
