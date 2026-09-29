@@ -88,11 +88,14 @@ supported compatibility claim of this slice.
 
 ## Renewal and disconnect
 
-Authorization codes last two minutes. Access tokens last at most fifteen
-minutes, and the approved connection lasts at most twenty-four hours. Refresh
+Authorization codes last two minutes. Access tokens last at most one hour,
+and newly approved connections last at most thirty days. Refresh
 uses `/oauth/token` with `grant_type=refresh_token`, the client ID, refresh
 token, and resource. It rotates both tokens without extending consent or
 changing scopes. Keep credentials in the application's secret store.
+
+Existing connections keep the expiry approved when they were created. Reconnect
+and approve again to receive the longer window; refresh does not extend it.
 
 Do not apply market-command retries to token exchange: authorization codes and
 refresh tokens are one-use. Replaying a consumed code or refresh token revokes
