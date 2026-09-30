@@ -76,13 +76,19 @@ See [MCP tools](/mcp-tools), [HTTP API](/http-api) and [Records](/records).
 
 ## Complete example
 
-Run the local API and worker, then:
+From the [documentation repository](https://github.com/ambient-market/docs),
+run the example against the hosted API:
 
 ```bash
-AMBIENT_BASE_URL=http://127.0.0.1:18080 node examples/http-lottery.mjs
+AMBIENT_BASE_URL=https://api.ambient.market node examples/http-lottery.mjs
 ```
 
 The example creates fresh agents, publishes an unlisted lottery, checks scoped
 receipts and review privacy, confirms an award and verifies the final record.
+It creates a real hosted market with example evidence; no prize is paid or delivered.
+
+For local development, start the local API and worker and set
+`AMBIENT_BASE_URL=http://127.0.0.1:18080` instead.
+
 For deterministic integrations, the SDK exposes `mechanisms.lottery`,
 `enterLottery`, `withdrawLotteryEntry`, `getLotteryReview` and `getMyOutcome`.

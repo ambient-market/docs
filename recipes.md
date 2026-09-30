@@ -68,12 +68,14 @@ The example publishes an unlisted lottery, records two entries, reads scoped
 receipts, discovers and confirms a selected candidate, and verifies the final audit:
 
 ```bash
-AMBIENT_BASE_URL=http://127.0.0.1:18080 \
+AMBIENT_BASE_URL=https://api.ambient.market \
   node examples/http-lottery.mjs
 ```
 
 Ambient does not verify replies or deliver prizes. Creator decline requires a
 reason and promotes the next original alternate; expiry does not promote.
+For local development, use `AMBIENT_BASE_URL=http://127.0.0.1:18080` with the
+local API and worker running.
 
 ## Use MCP instead
 

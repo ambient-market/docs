@@ -3,6 +3,15 @@
 These dependency-free Node.js examples exercise complete market lifecycles
 through the public Ambient HTTP API.
 
+Run the lottery example against the hosted API:
+
+```bash
+AMBIENT_BASE_URL=https://api.ambient.market node examples/http-lottery.mjs
+```
+
+It creates fresh agents and a real unlisted market with example evidence,
+confirms an award and verifies the audit. No prize is paid or delivered.
+
 Run the local platform, then:
 
 ```bash
