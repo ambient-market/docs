@@ -4,8 +4,9 @@ info:
   version: 0.1.0
   description: |
     Create and operate deterministic markets through authenticated HTTP
-    commands. The first launch supports unfunded markets across direct claim,
-    sealed forward auction, and request for offers. Funded payment paths are
+    commands. This revision supports unfunded markets across direct claim,
+    sealed forward auction, request for offers, and lottery. Lottery production
+    deployment is pending. Funded payment paths are
     implemented for integration testing, not a production payment offering.
 
     Request bodies use strict JSON. Unknown fields and multiple JSON values are
@@ -16,8 +17,8 @@ servers:
     description: Hosted Ambient environment
     variables:
       host:
-        default: api.example.com
-        description: API host supplied with your provisioned credentials.
+        default: api.ambient.market
+        description: Canonical Ambient production API host.
 security:
   - AmbientActor: []
     AmbientTimestamp: []
@@ -37,7 +38,7 @@ tags:
   - name: Markets
     description: Create, publish, and read markets.
   - name: Participation
-    description: Submit claims, bids, and private offers to open markets.
+    description: Submit claims, bids, private offers, and lottery entries to open markets.
   - name: Commitments
     description: Confirm or decline resulting commitments.
   - name: Records
@@ -971,6 +972,99 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /v1/markets/{marketId}/lottery-entries:
+    post:
+      tags: [Participation]
+      operationId: enterLottery
+      summary: Enter an unfunded lottery before its cutoff
+      description: One active entry per principal, not one human. Creator cannot enter. Evidence is opaque HTTPS data for creator review. No caller-supplied seed or draw command exists. Use my-outcome for the entry and eventual commitment; prize payment is external.
+      parameters:
+        - $ref: "#/components/parameters/MarketId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnterLotteryRequest"
+      responses:
+        "200":
+          description: Accepted entry decision; use my-outcome for the scoped entry receipt.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketActionResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/markets/{marketId}/lottery-withdrawals:
+    post:
+      tags: [Participation]
+      operationId: withdrawLotteryEntry
+      summary: Withdraw an owned active entry before entries close
+      parameters:
+        - $ref: "#/components/parameters/MarketId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WithdrawLotteryRequest"
+      responses:
+        "200":
+          description: Entry withdrawn; re-entry before close requires a new command ID.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketActionResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/markets/{marketId}/lottery-review:
+    get:
+      tags: [Participation]
+      operationId: getLotteryReview
+      summary: Read selected candidate evidence and review history
+      description: Requires current commitment:confirm authority for the creator principal. Omits seed, unselected alternates, actor IDs and grants. Drafts and non-lottery markets return not found. Decline separately requires commitment:decline and a reason. Silence/expiry does not promote an alternate.
+      parameters:
+        - $ref: "#/components/parameters/MarketId"
+        - $ref: "#/components/parameters/ReadPrincipalId"
+        - $ref: "#/components/parameters/ReadAuthorityRef"
+      responses:
+        "200":
+          description: Public state and selected candidate evidence with commitments, including past reviews.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LotteryReviewView"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /v1/markets/{marketId}/offers:
     get:
       tags: [Participation]
@@ -1147,6 +1241,8 @@ paths:
       description: |
         Declines a pending commitment before expiresAt. Direct-claim capacity is
         released. A sealed auction may promote the next eligible bid.
+        Lottery creator decline requires a reason and promotes the next original
+        candidate before the hard resolution deadline. Expiry never promotes.
       parameters:
         - $ref: "#/components/parameters/CommitmentId"
       requestBody:
@@ -1154,7 +1250,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CommitmentActionRequest"
+              $ref: "#/components/schemas/DeclineCommitmentRequest"
             example:
               commandId: table-decline-1
               principalId: diner-1
@@ -1282,6 +1378,8 @@ paths:
         actor with current market:create delegation. Delegated agents must
         supply principalId and authorityRef. Open sealed-auction bid requests
         are returned as {"sealed": true}.
+        Open lotteries return 403 even to their creator; use lottery-review
+        until resolution. Complete lottery audits are available after resolution.
       parameters:
         - $ref: "#/components/parameters/MarketId"
         - $ref: "#/components/parameters/ReadPrincipalId"
@@ -1745,6 +1843,7 @@ components:
         - market:cancel
         - market:claim
         - market:bid
+        - market:lottery_enter
         - market:offer_submit
         - market:offer_select
         - commitment:confirm
@@ -2230,6 +2329,54 @@ components:
             type: string
             minLength: 1
 
+    EnterLotteryRequest:
+      type: object
+      additionalProperties: false
+      required: [commandId, principalId]
+      properties:
+        commandId:
+          $ref: "#/components/schemas/CommandId"
+        principalId:
+          $ref: "#/components/schemas/PrincipalId"
+        authorityRef:
+          $ref: "#/components/schemas/AuthorityRef"
+        evidenceUrl:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: Optional valid UTF-8 HTTPS URL without embedded credentials or surrounding whitespace, at most 2048 bytes. Ambient does not fetch, verify or deduplicate it.
+
+    WithdrawLotteryRequest:
+      type: object
+      additionalProperties: false
+      required: [commandId, principalId, entryId]
+      properties:
+        commandId:
+          $ref: "#/components/schemas/CommandId"
+        principalId:
+          $ref: "#/components/schemas/PrincipalId"
+        authorityRef:
+          $ref: "#/components/schemas/AuthorityRef"
+        entryId:
+          type: string
+          minLength: 1
+
+    DeclineCommitmentRequest:
+      type: object
+      additionalProperties: false
+      required: [commandId, principalId]
+      properties:
+        commandId:
+          $ref: "#/components/schemas/CommandId"
+        principalId:
+          $ref: "#/components/schemas/PrincipalId"
+        authorityRef:
+          $ref: "#/components/schemas/AuthorityRef"
+        reason:
+          type: string
+          maxLength: 2048
+          description: Required for lottery creator decline; optional for other presets. Valid UTF-8, at most 2048 bytes, without surrounding whitespace.
+
     CommitmentActionRequest:
       type: object
       additionalProperties: false
@@ -2352,12 +2499,80 @@ components:
         - $ref: "#/components/schemas/DirectClaimMechanism"
         - $ref: "#/components/schemas/SealedAuctionMechanism"
         - $ref: "#/components/schemas/RequestForOffersMechanism"
+        - $ref: "#/components/schemas/LotteryMechanism"
       discriminator:
         propertyName: presetId
         mapping:
           direct-claim.v1: "#/components/schemas/DirectClaimMechanism"
           sealed-forward-auction.v1: "#/components/schemas/SealedAuctionMechanism"
           request-for-offers.v1: "#/components/schemas/RequestForOffersMechanism"
+          lottery.v1: "#/components/schemas/LotteryMechanism"
+
+    LotteryMechanism:
+      type: object
+      additionalProperties: false
+      required: [presetId, config]
+      properties:
+        presetId:
+          type: string
+          const: lottery.v1
+        config:
+          oneOf:
+            - $ref: "#/components/schemas/LotteryImmediateConfig"
+            - $ref: "#/components/schemas/LotteryReviewedConfig"
+
+    LotteryImmediateConfig:
+      type: object
+      additionalProperties: false
+      required: [capacity, entryClosesAt, confirmation]
+      properties:
+        capacity:
+          type: integer
+          format: uint32
+          minimum: 1
+        entryClosesAt:
+          type: string
+          format: date-time
+          description: Must follow publication; entries and withdrawals at or after it are rejected.
+        confirmation:
+          type: string
+          const: none
+        confirmationWindowSeconds: false
+        resolutionDeadline: false
+        eligibilityTerms:
+          type: string
+          maxLength: 8192
+          description: At most 8192 UTF-8 bytes; described qualifications are not automatically verified. Funding must be none.
+
+    LotteryReviewedConfig:
+      type: object
+      additionalProperties: false
+      required: [capacity, entryClosesAt, confirmation, confirmationWindowSeconds, resolutionDeadline]
+      properties:
+        capacity:
+          type: integer
+          format: uint32
+          minimum: 1
+        entryClosesAt:
+          type: string
+          format: date-time
+          description: Must follow publication.
+        confirmation:
+          type: string
+          const: creator
+        confirmationWindowSeconds:
+          type: integer
+          format: uint32
+          minimum: 1
+          description: Per-candidate review window from actual selection, capped at resolutionDeadline. Late selection or promotion can yield a shorter window, even nearly zero.
+        resolutionDeadline:
+          type: string
+          format: date-time
+          description: Must follow entryClosesAt; no awards or promotions after this deadline.
+        eligibilityTerms:
+          type: string
+          maxLength: 8192
+          description: At most 8192 UTF-8 bytes; creator evaluates evidence for provisional winners. Funding must be none.
 
     FundingPolicy:
       type: object
@@ -2487,6 +2702,21 @@ components:
           format: uint32
           maximum: 0
           description: May be omitted. An explicit value must be 0 and is removed during normalization.
+        maxPerPrincipal:
+          type: integer
+          format: uint32
+          minimum: 1
+          description: >-
+            Optional cap on the live commitments one participant principal may
+            hold. Declined, expired, and failed commitments release the
+            allowance. Omit for no limit.
+        claimsCloseAt:
+          type: string
+          format: date-time
+          description: >-
+            Optional RFC 3339 cutoff for accepting claims, which must be after
+            publication. Claims at or after it are rejected and the market
+            closes automatically.
 
     DirectClaimHeldConfig:
       type: object
@@ -2509,6 +2739,21 @@ components:
           format: uint32
           minimum: 1
           description: Confirmation period before the commitment expires.
+        maxPerPrincipal:
+          type: integer
+          format: uint32
+          minimum: 1
+          description: >-
+            Optional cap on the live commitments one participant principal may
+            hold. Declined, expired, and failed commitments release the
+            allowance. Omit for no limit.
+        claimsCloseAt:
+          type: string
+          format: date-time
+          description: >-
+            Optional RFC 3339 cutoff for accepting claims, which must be after
+            publication. Claims at or after it are rejected and the market
+            closes automatically.
 
     DirectClaimPricing:
       description: Free or posted terms recorded in the resulting commitment.
@@ -2567,6 +2812,14 @@ components:
           format: uint32
           minimum: 1
           description: Winner confirmation period after resolution.
+        resolutionDeadline:
+          type: string
+          format: date-time
+          description: >-
+            Final promotion and resolution horizon, which must be after
+            closesAt. Optional for unfunded auctions and required for funded
+            ones, where funding must stay valid through it plus settlement
+            grace.
 
     CommandIdentity:
       type: object
@@ -2585,6 +2838,22 @@ components:
           type: string
           minLength: 1
           description: Delegation used when actorId and principalId differ.
+
+    MarketCreator:
+      type: object
+      additionalProperties: false
+      required: [principalId]
+      description: Creator principal; actor and delegation metadata are omitted from lottery action responses.
+      properties:
+        principalId:
+          type: string
+          minLength: 1
+        actorId:
+          type: string
+          minLength: 1
+        authorityRef:
+          type: string
+          minLength: 1
 
     MarketDiscoverability:
       type: string
@@ -2616,7 +2885,7 @@ components:
         discoverability:
           $ref: "#/components/schemas/MarketDiscoverability"
         creator:
-          $ref: "#/components/schemas/CommandIdentity"
+          $ref: "#/components/schemas/MarketCreator"
         subject:
           $ref: "#/components/schemas/Subject"
         fulfillment:
@@ -2629,6 +2898,7 @@ components:
             - $ref: "#/components/schemas/DirectClaimState"
             - $ref: "#/components/schemas/SealedAuctionState"
             - $ref: "#/components/schemas/RequestForOffersState"
+            - $ref: "#/components/schemas/LotteryState"
         funding:
           $ref: "#/components/schemas/FundingPolicy"
         publicationCredentialId:
@@ -2685,7 +2955,7 @@ components:
           $ref: "#/components/schemas/MechanismSelection"
         mechanismState:
           type: object
-          description: Preset-owned public state with private bid and offer identifiers removed.
+          description: Preset-owned public state with private participation identifiers removed. Lottery exposes phase and activeEntryCount only, not digests or alternate positions.
         funding:
           $ref: "#/components/schemas/FundingPolicy"
         paymentCredentialInstructions:
@@ -2719,11 +2989,73 @@ components:
           description: Own offers with current state; private terms are omitted.
           items:
             $ref: "#/components/schemas/ParticipantOfferOutcome"
+        lotteryEntries:
+          type: array
+          description: Own entries including withdrawal/re-entry history. Active is not an award; consult commitments. Empty commitments are not final loss while promotion remains possible.
+          items:
+            $ref: "#/components/schemas/LotteryEntryView"
         commitments:
           type: array
           description: Current commitments allocated to the represented principal.
           items:
             $ref: "#/components/schemas/Commitment"
+
+    LotteryEntryView:
+      type: object
+      additionalProperties: false
+      required: [id, state, submittedAt, updatedAt]
+      properties:
+        id:
+          type: string
+        evidenceUrl:
+          type: string
+        state:
+          type: string
+          enum: [active, withdrawn]
+        submittedAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    LotteryReviewView:
+      type: object
+      additionalProperties: false
+      required: [market, candidates]
+      properties:
+        market:
+          $ref: "#/components/schemas/PublicMarket"
+        candidates:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [entry, commitment]
+            properties:
+              entry:
+                $ref: "#/components/schemas/LotteryEntryView"
+              commitment:
+                $ref: "#/components/schemas/Commitment"
+
+    LotteryState:
+      type: object
+      additionalProperties: false
+      required: [phase, activeEntryCount]
+      properties:
+        phase:
+          type: string
+          enum: [accepting_entries, awaiting_draw, awaiting_confirmation, resolved]
+        activeEntryCount:
+          type: integer
+          minimum: 0
+        entrySetDigest:
+          type: string
+        drawDigest:
+          type: string
+        nextEntryIndex:
+          type: integer
+          minimum: 0
 
     ParticipantOfferOutcome:
       type: object
@@ -3382,6 +3714,47 @@ components:
           description: Byte-preserved private offer snapshots, present only for creator-authorized request-for-offers records.
           items:
             $ref: "#/components/schemas/PrivateRequestForOffer"
+        privateLotteryEntries:
+          type: array
+          description: Complete private entries, only in the creator-authorized audit record after lottery resolution.
+          items:
+            type: object
+            required: [id, marketId, marketVersion, identity, state, submittedAt, updatedAt]
+            properties:
+              id:
+                type: string
+              marketId:
+                type: string
+              marketVersion:
+                type: integer
+              identity:
+                $ref: "#/components/schemas/CommandIdentity"
+              evidenceUrl:
+                type: string
+              state:
+                type: string
+                enum: [active, withdrawn]
+              submittedAt:
+                type: string
+                format: date-time
+              updatedAt:
+                type: string
+                format: date-time
+        privateLotteryDraw:
+          type: object
+          description: Finalized draw for creator audit, not an operational participant/review view. Reproducibility does not prove honest randomness generation by Ambient.
+          required: [algorithm, seed, entrySetDigest, orderedEntryIds]
+          properties:
+            algorithm:
+              type: string
+            seed:
+              type: string
+            entrySetDigest:
+              type: string
+            orderedEntryIds:
+              type: array
+              items:
+                type: string
         events:
           type: array
           items:

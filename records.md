@@ -30,7 +30,7 @@ GET /v1/markets/{marketId}/my-outcome
 ```
 
 The MCP equivalent is `get_my_market_outcome`. It returns the represented
-principal's own bid receipts, offer states, and commitments beside the public
+principal's own bid receipts, offer states, lottery entries, and commitments beside the public
 market snapshot. It never returns another participant's private outcome.
 
 Use this view to recover from a lost response or discover a result produced by
@@ -50,16 +50,23 @@ The MCP equivalent is `get_market_record`. The record contains:
 - accepted and deterministically rejected commands in server order;
 - accepted transition events;
 - current commitments;
-- private offers for request-for-offers markets; and
+- private offers for request-for-offers markets;
+- entries and the finalized draw for resolved lotteries; and
 - integrity metadata for the returned view.
 
 The creator record is private. It is available to the creator principal or the
 original creating actor while it still has current `market:create` authority.
 
+For an open lottery, the complete record returns HTTP 403 even to its creator.
+Use `get_lottery_review` or `GET /v1/markets/{marketId}/lottery-review` for selected
+candidates until resolution. The complete record then includes the seed, full
+order, entry identities and review history; no future alternate order is exposed
+while reviews are open.
+
 ## Replay and integrity
 
-Ambient can independently replay direct-claim and request-for-offers records
-and compare the result with stored market, offer, and commitment state. These
+Ambient can independently replay direct-claim, request-for-offers and lottery records
+and compare the result with stored market, participant input, draw and commitment state. These
 records report `stateReconstructed: true` when that comparison succeeds.
 
 Sealed-auction records already contain the complete ordered history and a

@@ -85,6 +85,7 @@ Grant only the actions required by the task. Common scopes include:
 | --- | --- |
 | Create or publish a market | `market:create`, `market:publish` |
 | Claim capacity | `market:claim` |
+| Enter or withdraw a lottery entry | `market:lottery_enter` |
 | Submit an auction bid | `market:bid` |
 | Submit an offer | `market:offer_submit` |
 | Select offers | `market:offer_select` |

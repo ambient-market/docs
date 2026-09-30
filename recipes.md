@@ -55,6 +55,26 @@ AMBIENT_BASE_URL=http://127.0.0.1:18080 \
   node examples/http-request-for-offers.mjs
 ```
 
+## Give away a free prize
+
+Use [Lottery](/lottery) for equal-weight entries and optional creator eligibility review.
+
+> Create a free giveaway for one externally delivered prize. Take one active
+> entry per principal until the announced cutoff, accept reply URLs as evidence,
+> and require creator review against the published eligibility terms. Show me
+> the complete draft before publishing.
+
+The example publishes an unlisted lottery, records two entries, reads scoped
+receipts, discovers and confirms a selected candidate, and verifies the final audit:
+
+```bash
+AMBIENT_BASE_URL=http://127.0.0.1:18080 \
+  node examples/http-lottery.mjs
+```
+
+Ambient does not verify replies or deliver prizes. Creator decline requires a
+reason and promotes the next original alternate; expiry does not promote.
+
 ## Use MCP instead
 
 The MCP tools call the same application services as HTTP. After authentication:

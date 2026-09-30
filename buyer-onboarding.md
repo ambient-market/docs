@@ -37,6 +37,7 @@ Common participant permissions are:
 | Register or claim capacity | `market:claim` |
 | Submit a sealed bid | `market:bid` |
 | Submit or withdraw an offer | `market:offer_submit` |
+| Enter or withdraw a lottery entry; read your outcome | `market:lottery_enter` |
 | Confirm an allocation | `commitment:confirm` |
 | Decline an allocation | `commitment:decline` |
 

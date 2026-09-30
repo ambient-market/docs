@@ -32,6 +32,7 @@ market:claim
 market:bid
 market:offer_submit
 market:offer_select
+market:lottery_enter
 commitment:confirm
 commitment:decline
 commitment:refund

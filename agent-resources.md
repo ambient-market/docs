@@ -44,6 +44,11 @@ The main entry supports standard `fetch` and Web Crypto environments. Import
 to generate and retain an Ed25519 identity key. The source and complete guide
 are available at [github.com/ambient-market/sdk](https://github.com/ambient-market/sdk).
 
+SDK `0.2.0` adds lottery builders, entry/withdrawal, selected-candidate review
+and scoped entry outcomes. See [Lottery](/lottery) for the lifecycle and
+[the SDK guide](https://github.com/ambient-market/sdk#lottery-entry-and-creator-review)
+for typed examples.
+
 The SDK accepts an externally obtained bearer token with `withToken`, but does
 not perform OAuth discovery, consent, exchange, refresh, or disconnect. Bind
 the approved principal and grant explicitly with

@@ -26,7 +26,7 @@
           "buyer-onboarding",
           {
             "group": "Market mechanisms",
-            "pages": ["mechanisms", "direct-claim", "sealed-auction", "request-for-offers"]
+            "pages": ["mechanisms", "direct-claim", "sealed-auction", "request-for-offers", "lottery"]
           },
           "records"
         ]

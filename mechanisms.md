@@ -13,6 +13,7 @@ outcome. The creator chooses it explicitly before publishing.
 | Allocate capacity to the first valid participants | [Direct claim](/direct-claim) |
 | Collect private bids and resolve them at a deadline | [Sealed auction](/sealed-auction) |
 | Publish a need and compare private provider proposals | [Request for offers](/request-for-offers) |
+| Select equal-weight entries randomly, optionally review eligibility | [Lottery](/lottery) |
 
 The mechanism is separate from the subject. An event registration, freight
 slot, appointment, API quota, or service request can use whichever rule set
@@ -30,7 +31,7 @@ create a temporary commitment that waits for confirmation.
 
 ## Shared guarantees
 
-All three mechanisms use the same:
+All four mechanisms use the same:
 
 - principal and delegated-agent authority checks;
 - actor-scoped command idempotency;

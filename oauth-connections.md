@@ -76,7 +76,7 @@ approve in the browser; adjust scopes for the work you actually want to permit.
 to the CLI. Follow its callback instructions without sharing the URL in chat.
 
 Supported scopes are `market:create`, `market:publish`, `market:cancel`,
-`market:claim`, `market:bid`, `market:offer_submit`, `market:offer_select`,
+`market:claim`, `market:bid`, `market:offer_submit`, `market:offer_select`, `market:lottery_enter`,
 `commitment:confirm`, and `commitment:decline`. Request only those needed.
 Payment, payee registration, credential issuance, and refund scopes are not
 available through this connection flow.

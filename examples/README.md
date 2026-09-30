@@ -9,6 +9,7 @@ Run the local platform, then:
 AMBIENT_BASE_URL=http://127.0.0.1:18080 node examples/http-direct-claim.mjs
 AMBIENT_BASE_URL=http://127.0.0.1:18080 node examples/http-sealed-auction.mjs
 AMBIENT_BASE_URL=http://127.0.0.1:18080 node examples/http-request-for-offers.mjs
+AMBIENT_BASE_URL=http://127.0.0.1:18080 node examples/http-lottery.mjs
 ```
 
 To create a temporary bearer token for an MCP client:

@@ -7,7 +7,8 @@ The HTTP API exposes typed market and payment-authorization commands and market
 queries as JSON, plus self-service signup, trusted operator provisioning, and
 principal-controlled delegation commands. It also provides configured-issuer
 credential issuance, status lookup, and revocation. The first launch is
-unfunded across all three market presets. Payment authorization and settlement
+unfunded across four market presets, including [Lottery](/lottery). Payment
+authorization and settlement
 are implemented integration paths, but principal-bound Connect onboarding and
 production rail reconciliation are not complete. The API does not provide
 private-market access policy, key rotation, or portable VCs. Human signup has
@@ -74,6 +75,9 @@ not send `occurredAt` or `actorId`.
 | `GET` | `/v1/markets/{marketId}/offers` | Read public RFO state and offers scoped to the currently authorized principal. |
 | `POST` | `/v1/markets/{marketId}/offer-withdrawals` | Withdraw your own active RFO offer. |
 | `POST` | `/v1/markets/{marketId}/offer-selections` | Select RFO offers as the requester after close. |
+| `POST` | `/v1/markets/{marketId}/lottery-entries` | Enter an unfunded lottery with optional evidence URL. |
+| `POST` | `/v1/markets/{marketId}/lottery-withdrawals` | Withdraw your own active entry before close. |
+| `GET` | `/v1/markets/{marketId}/lottery-review` | Creator-authorized evidence and commitments for selected candidates only. |
 | `POST` | `/v1/commitments/{commitmentId}/confirm` | Confirm exact commitment terms. |
 | `POST` | `/v1/commitments/{commitmentId}/decline` | Decline a pending commitment. |
 | `POST` | `/v1/commitments/{commitmentId}/refund` | Creator-authorized full refund of a settled commitment. |
@@ -89,6 +93,12 @@ the private read. RFO offer reads use `market:offer_select` for the requester
 and `market:offer_submit` for a provider's own offers. Full-record reads remain
 limited to the creator principal or the original creating actor with current
 `market:create` authority.
+
+Lottery entry, withdrawal and own-outcome reads require `market:lottery_enter`.
+Candidate review requires creator `commitment:confirm` authority; declining
+requires `commitment:decline` and a recorded `reason`. The existing confirm and
+decline endpoints apply the lottery's rules. There is no public draw or seed
+endpoint. OAuth connections must explicitly consent to the new entry scope.
 
 ## Command envelopes
 
@@ -141,6 +151,27 @@ Commitment confirmation, decline, and refund bodies contain:
 ```text
 commandId, principalId, authorityRef?
 ```
+
+Decline also accepts `reason`: required for lottery creator decline, optional for
+other presets. It must be valid UTF-8, at most 2048 bytes, without surrounding
+whitespace. Lottery confirm/decline responses and exact retries redact private
+mechanism digests and alternate positions.
+
+### Lottery commands and review
+
+| Operation | Fields | Authority |
+| --- | --- | --- |
+| `POST /v1/markets/{marketId}/lottery-entries` | Required `commandId`, `principalId`; optional `authorityRef`, `evidenceUrl`. | `market:lottery_enter` |
+| `POST /v1/markets/{marketId}/lottery-withdrawals` | Required `commandId`, `principalId`, `entryId`; optional `authorityRef`. | `market:lottery_enter` |
+| `GET /v1/markets/{marketId}/lottery-review` | Optional query `principalId`, `authorityRef`; omit for self-representation. | Creator `commitment:confirm` |
+
+`entryId` is the opaque ID returned by your own outcome read. Entries and
+withdrawals must arrive before `entryClosesAt`; the same principal cannot keep
+two active entries. Wrong-preset entry/withdrawal commands return 404, as do
+wrong-preset review reads. `evidenceUrl` is an HTTPS URL without credentials or
+surrounding whitespace, valid UTF-8 and at most 2048 bytes. URLs are not unique
+and are not fetched or verified. Configuration `eligibilityTerms` is at most
+8192 UTF-8 bytes after trimming.
 
 Payment-authorization bodies contain:
 
@@ -283,6 +314,9 @@ while auction promotion remains possible.
 The complete record includes command inputs and decisions, commitments,
 events, and integrity metadata. It remains restricted to the creator principal
 or the original creating actor with current `market:create` authority.
+For an open lottery, this endpoint returns 403 even to its creator. Use the
+candidate review endpoint while reviews are open; the complete verified audit
+becomes available after resolution, including expired or unawarded outcomes.
 
 While a sealed auction is open, bid command bodies in that creator-visible
 record are replaced with `{"sealed":true}`. Public bid receipts and events

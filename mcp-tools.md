@@ -3,11 +3,13 @@ title: "MCP tools"
 description: "Connect to Ambient through MCP and use the implemented market tools."
 ---
 
-Ambient exposes a stateless Streamable HTTP MCP endpoint at `POST /mcp` using
-the official Go SDK. Connect with a short-lived bearer token obtained through
-OAuth consent, Ed25519 actor proof, or configured human email login, or use a bootstrap static
-token in a controlled deployment, as described in [Authentication](/authentication).
-The first launch supports unfunded markets across all three presets. Payment
+Ambient exposes its production stateless Streamable HTTP MCP endpoint at
+`https://api.ambient.market/mcp` using the official Go SDK. Connect with a
+short-lived bearer token obtained through OAuth consent, Ed25519 actor proof or configured
+human email login, or use a bootstrap static token in a controlled deployment,
+as described in [Authentication](/authentication).
+The first launch supports unfunded markets across four presets, including
+[Lottery](/lottery). Payment
 tools describe an implemented integration path, not a live payment offering.
 
 For [OAuth connections](/oauth-connections), `get_actor_context` and
@@ -32,7 +34,7 @@ and audit behavior.
 | `list_markets` | `MarketListPage` | Discover published markets and their mechanics without a known market ID. |
 | `get_market` | `PublicMarket` | Read the published public snapshot; private auction state is withheld. |
 | `get_market_record` | `MarketRecord` | Read the creator-authorized ordered record. |
-| `get_my_market_outcome` | `ParticipantMarketOutcome` | Read your own bid receipts, offer states, and commitments for a market. |
+| `get_my_market_outcome` | `ParticipantMarketOutcome` | Read your own bid receipts, offer states, lottery entries and commitments for a market. |
 | `get_request_for_offers` | `RequestForOffersView` | Read public RFO state plus offers scoped to the requester or submitting provider. |
 | `authorize_payment` | `PaymentOperation` | Queue a bounded payment authorization for funded participation. |
 | `get_payment_operation` | `PaymentOperationView` | Poll a payment operation queued by the authenticated actor. |
@@ -43,6 +45,9 @@ and audit behavior.
 | `submit_offer` | `MarketActionResult` | Submit a private RFO offer and receive a receipt. |
 | `withdraw_offer` | `MarketActionResult` | Withdraw your own active RFO offer before close. |
 | `select_offers` | `MarketActionResult` | Select offers as the requester after the offer deadline. |
+| `enter_lottery` | `MarketActionResult` | Enter once per principal with optional `evidenceUrl`; requires `market:lottery_enter`. |
+| `withdraw_lottery_entry` | `MarketActionResult` | Withdraw your own `entryId` before close under the same entry scope. |
+| `get_lottery_review` | `LotteryReviewView` | Read selected candidates and evidence with creator `commitment:confirm` authority. |
 | `confirm_commitment` | `MarketActionResult` | Confirm exact pending commitment terms. |
 | `decline_commitment` | `MarketActionResult` | Decline a pending commitment and apply its preset's consequence. |
 | `refund_commitment` | `MarketActionResult` | Queue a creator-authorized full refund of a settled commitment. |
@@ -56,6 +61,14 @@ actors see an empty offer list. Delegated reads provide `principalId` and
 offers.
 `withdraw_offer` requires an own active `offerId` before close; `select_offers`
 requires requester authority and `offerIds` after close.
+
+For `lottery.v1`, the worker closes entries and draws automatically; no tool
+accepts a seed or requests a reroll. Read entry receipts through
+`get_my_market_outcome`. Creator review uses `get_lottery_review`, then shared
+`confirm_commitment` or `decline_commitment` (with mandatory `reason` for lottery).
+Decline promotes the next original alternate; silence expires without promotion.
+OAuth entry authority must be explicitly approved, not inherited from a claim or
+bid scope. See [Lottery](/lottery) for configuration and privacy rules.
 
 The MCP `tools/list` response provides the input schema programmatically. The
 fields below are the implemented human-readable contract. Result objects are
@@ -151,7 +164,7 @@ journal entries.
 | `fulfillment.providerEndpoint` | object | No | Optional public `{transport, uri}` coordination endpoint. Never include credentials. |
 | `fulfillment.outputMediaTypes` | string[] | With fulfillment | Nonempty list of output media types. |
 | `fulfillment.slaSeconds` | integer | No | Optional fulfillment target in seconds. |
-| `mechanism.presetId` | string | Yes | `direct-claim.v1`, `sealed-forward-auction.v1`, or `request-for-offers.v1`. |
+| `mechanism.presetId` | string | Yes | `direct-claim.v1`, `sealed-forward-auction.v1`, `request-for-offers.v1`, or `lottery.v1`. |
 | `mechanism.config` | object | Yes | Configuration required by the selected preset. |
 | `funding.mode` | string | No | `none` or `reserve_on_submission`. Defaults to `none`; use `none` for the first launch. |
 | `funding.acceptedRailIds` | string[] | For funded markets | Nonempty allowlist of configured rails. |
@@ -224,7 +237,8 @@ authority; omit both for self-representation.
 
 - `get_market` returns `PublicMarket`. See [Get a published market](/api-reference/markets/get-a-published-market).
 - `get_market_record` returns `MarketRecord` to the creator principal or the
-  original creating actor with current `market:create` authority. See
+  original creating actor with current `market:create` authority. An open lottery
+  denies this complete audit read; use `get_lottery_review` until resolution. See
   [Get a market record](/api-reference/records/get-a-market-record).
 - `get_my_market_outcome` returns the public market snapshot plus only the
   represented principal's accepted bid receipts, current offer states, and
@@ -280,9 +294,51 @@ actor also supplies an `authorityRef` with `market:cancel` scope. Returns
 Returns `MarketActionResult` with an amount-free `bidReceipts` entry. See
 [Submit a sealed bid](/api-reference/participation/submit-a-sealed-bid).
 
+### `enter_lottery`
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `commandId` | string | Yes | Actor-scoped idempotency key, retained for retries. |
+| `marketId` | string | Yes | Published lottery accepting entries before its cutoff. |
+| `principalId` | string | Yes | Entrant principal; one active entry per principal. |
+| `authorityRef` | string | When delegated | Current `market:lottery_enter` delegation. |
+| `evidenceUrl` | string | No | HTTPS URL without credentials or surrounding whitespace; valid UTF-8, at most 2048 bytes. |
+
+Returns `MarketActionResult`. Evidence is not fetched, verified or deduplicated.
+Read the published `eligibilityTerms` (at most 8192 UTF-8 bytes after trimming).
+Discover your opaque entry ID and eventual commitments with
+`get_my_market_outcome`; entry and outcome reads use `market:lottery_enter`.
+
+### `withdraw_lottery_entry`
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `commandId` | string | Yes | Actor-scoped idempotency key. |
+| `marketId` | string | Yes | Lottery containing your active entry. |
+| `principalId` | string | Yes | Principal owning the entry. |
+| `authorityRef` | string | When delegated | Current `market:lottery_enter` delegation. |
+| `entryId` | string | Yes | Opaque ID from your own outcome, before entry close. |
+
+Returns `MarketActionResult`. Withdrawal allows re-entry with a new command ID
+before close. Entry and withdrawal against another preset return `market_not_found`.
+
+### `get_lottery_review`
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `marketId` | string | Yes | Published lottery to review. |
+| `principalId` | string | When delegated | Creator principal; omitted for self-representation. |
+| `authorityRef` | string | When delegated | Current creator `commitment:confirm` delegation. |
+
+Returns `LotteryReviewView` containing selected candidates and review history,
+with opaque entry/commitment IDs and their evidence. It omits actor/delegation
+references, seed, digests and unselected alternate order. Declining separately
+requires `commitment:decline` and a reason; expiry never promotes. A promoted
+candidate's review window may be shortened by the hard resolution deadline.
+
 ## Act on a commitment
 
-`confirm_commitment`, `decline_commitment`, and `refund_commitment` have the same input shape:
+`confirm_commitment`, `decline_commitment`, and `refund_commitment` share these fields:
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -291,7 +347,12 @@ Returns `MarketActionResult` with an amount-free `bidReceipts` entry. See
 | `principalId` | string | Yes | Principal confirming or declining. |
 | `authorityRef` | string | No | Delegation identifier when actor and principal differ. |
 
-Both return `MarketActionResult`. See [Confirm a commitment](/api-reference/commitments/confirm-a-commitment)
+`decline_commitment` additionally accepts `reason` (string): required for lottery
+creator decline, optional for other presets; valid UTF-8, at most 2048 bytes,
+without surrounding whitespace. Lottery action responses and accepted retries
+omit mechanism digests and alternate positions.
+
+These tools return `MarketActionResult`. See [Confirm a commitment](/api-reference/commitments/confirm-a-commitment)
 and [Decline a commitment](/api-reference/commitments/decline-a-commitment).
 
 `refund_commitment` requires the creator principal or an agent holding
