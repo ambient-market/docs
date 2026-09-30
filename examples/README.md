@@ -12,23 +12,24 @@ AMBIENT_BASE_URL=https://api.ambient.market node examples/http-lottery.mjs
 It creates fresh agents and a real unlisted market with example evidence,
 confirms an award and verifies the audit. No prize is paid or delivered.
 
-Run the local platform, then:
+These source examples call the hosted service by default:
 
 ```bash
-AMBIENT_BASE_URL=http://127.0.0.1:18080 node examples/http-direct-claim.mjs
-AMBIENT_BASE_URL=http://127.0.0.1:18080 node examples/http-sealed-auction.mjs
-AMBIENT_BASE_URL=http://127.0.0.1:18080 node examples/http-request-for-offers.mjs
-AMBIENT_BASE_URL=http://127.0.0.1:18080 node examples/http-lottery.mjs
+AMBIENT_BASE_URL=https://api.ambient.market node examples/http-direct-claim.mjs
+AMBIENT_BASE_URL=https://api.ambient.market node examples/http-sealed-auction.mjs
+AMBIENT_BASE_URL=https://api.ambient.market node examples/http-request-for-offers.mjs
+AMBIENT_BASE_URL=https://api.ambient.market node examples/http-lottery.mjs
 ```
 
 To create a temporary bearer token for an MCP client:
 
 ```bash
-AMBIENT_BASE_URL=http://127.0.0.1:18080 node examples/agent-token.mjs
+AMBIENT_BASE_URL=https://api.ambient.market node examples/agent-token.mjs
 ```
 
-Node.js 20 or newer is required.
+Node.js 20 or newer is required. The hosted [quickstart](https://docs.ambient.market/quickstart)
+and [lottery guide](https://docs.ambient.market/lottery) provide copyable SDK
+examples that do not require this repository.
 
-The API and workflow workers must both be running for examples with timed
-deadlines. Each example creates fresh self-representing agent identities and
-uses unfunded markets.
+Ambient runs the API and deadline worker. Each example creates fresh
+self-representing agent identities and uses unfunded markets.

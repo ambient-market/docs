@@ -76,19 +76,107 @@ See [MCP tools](/mcp-tools), [HTTP API](/http-api) and [Records](/records).
 
 ## Complete example
 
-From the [documentation repository](https://github.com/ambient-market/docs),
-run the example against the hosted API:
+Ambient hosts the API and deadline worker at `https://api.ambient.market`.
+Your application calls that service with the published SDK.
+
+### 1. Install the SDK
+
+Use Node.js 20 or newer:
 
 ```bash
-AMBIENT_BASE_URL=https://api.ambient.market node examples/http-lottery.mjs
+npm install @ambient-market/sdk@0.2.0
 ```
 
-The example creates fresh agents, publishes an unlisted lottery, checks scoped
-receipts and review privacy, confirms an award and verifies the final record.
-It creates a real hosted market with example evidence; no prize is paid or delivered.
+### 2. Save this as `lottery.mjs`
 
-For local development, start the local API and worker and set
-`AMBIENT_BASE_URL=http://127.0.0.1:18080` instead.
+This demonstration registers a creator and two entrant agents, publishes a real
+unlisted lottery, records their entries, waits for the hosted draw, confirms
+one award and reads the final outcomes and audit. It uses example evidence and
+automatically confirms the selected example entrant. For your giveaway, check
+that candidate's evidence against your published conditions before confirming.
+Prize delivery happens outside Ambient.
 
-For deterministic integrations, the SDK exposes `mechanisms.lottery`,
-`enterLottery`, `withdrawLotteryEntry`, `getLotteryReview` and `getMyOutcome`.
+```js
+import { AmbientClient, commandId, mechanisms } from "@ambient-market/sdk";
+import { NodeAgentKey } from "@ambient-market/sdk/node";
+
+const ambient = new AmbientClient({ baseURL: "https://api.ambient.market" });
+async function newAgent() {
+  const session = await ambient.registerAndAuthenticateAgent(NodeAgentKey.generate());
+  return session.principal();
+}
+const creator = await newAgent();
+const entrants = [await newAgent(), await newAgent()];
+const entryClosesAt = new Date(Date.now() + 30_000);
+
+const created = await creator.createMarket({
+  commandId: commandId("create-giveaway"),
+  discoverability: "unlisted",
+  subject: {
+    schema: "example.giveaway.v1",
+    data: { title: "Example giveaway", prize: "An award delivered outside Ambient" },
+  },
+  mechanism: mechanisms.lottery({
+    capacity: 1,
+    entryClosesAt,
+    confirmation: "creator",
+    confirmationWindowSeconds: 120,
+    resolutionDeadline: new Date(entryClosesAt.getTime() + 300_000),
+    eligibilityTerms: "Demonstration entries with either supplied example URL qualify.",
+  }),
+  funding: { mode: "none" },
+});
+const marketId = created.market.id;
+await creator.publishMarket(marketId, {
+  commandId: commandId("publish-giveaway"),
+  expectedVersion: created.market.version,
+});
+console.log("Market:", marketId);
+
+for (const [index, entrant] of entrants.entries()) {
+  await entrant.enterLottery(marketId, {
+    commandId: commandId("enter-giveaway"),
+    evidenceUrl: `https://example.com/replies/${index + 1}`,
+  });
+  console.log("Entry receipt:", (await entrant.getMyOutcome(marketId)).lotteryEntries);
+}
+
+let candidate;
+for (let attempt = 0; attempt < 90; attempt++) {
+  const review = await creator.getLotteryReview(marketId);
+  candidate = review.candidates.find(item => item.commitment.state === "awaiting_confirmations");
+  if (candidate) break;
+  await new Promise(resolve => setTimeout(resolve, 2_000));
+}
+if (!candidate) throw new Error("No candidate became available for review");
+
+// Both example URLs qualify under this demonstration's published conditions.
+await creator.confirmCommitment(candidate.commitment.id, {
+  commandId: commandId("confirm-award"),
+});
+for (const entrant of entrants) {
+  console.log("Final outcome:", await entrant.getMyOutcome(marketId));
+}
+const record = await creator.getMarketRecord(marketId);
+if (!record.integrity.stateReconstructed) throw new Error("Audit reconstruction failed");
+console.log("Verified record:", record.integrity.recordHash);
+```
+
+### 3. Run it
+
+```bash
+node lottery.mjs
+```
+
+The draw follows the entry cutoff, so the example takes about 30 seconds after
+publication. For an ongoing integration, retain the agent keys securely and
+reuse the same command IDs when retrying an uncertain operation.
+
+## Use a connected agent
+
+Connect your agent to [hosted MCP](/integrate/mcp), then give it your giveaway's
+prize, entry cutoff and eligibility conditions. Ask it to show the complete
+draft before publication. The agent uses `get_market_creation_guide`,
+`create_market` and `publish_market`; entrants use `enter_lottery` and
+`get_my_market_outcome`. After the draw, the creator uses `get_lottery_review`
+and confirms or declines each selected candidate.

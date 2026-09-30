@@ -1,38 +1,27 @@
 ---
 title: "Environments and testing"
-description: "Run Ambient locally and distinguish liveness, readiness, and integration tests."
+description: "Use hosted Ambient endpoints and run integration checks against the live service."
 ---
 
-## Local environment
+## Hosted service
 
-The platform repository includes a Docker Compose environment for API, worker,
-and PostgreSQL processes:
-
-```bash
-cd platform
-make manual-up
-```
-
-The default local endpoints are:
+Ambient operates the API, deadline worker and database. Integrations connect to:
 
 | Surface | URL |
 | --- | --- |
-| HTTP API | `http://127.0.0.1:18080` |
-| MCP Streamable HTTP | `http://127.0.0.1:18080/mcp` |
-| Liveness | `http://127.0.0.1:18080/livez` |
-| Readiness | `http://127.0.0.1:18080/readyz` |
+| HTTP API | `https://api.ambient.market` |
+| MCP Streamable HTTP | `https://api.ambient.market/mcp` |
+| Liveness | `https://api.ambient.market/livez` |
+| Readiness | `https://api.ambient.market/readyz` |
 
-Wait for readiness before running an integration:
-
-```bash
-curl --fail http://127.0.0.1:18080/readyz
-```
-
-Stop the environment with:
+Check readiness with:
 
 ```bash
-make manual-down
+curl --fail https://api.ambient.market/readyz
 ```
+
+Use the [quickstart](/quickstart) or [lottery example](/lottery#complete-example)
+to call the hosted service from your application. Both use the published SDK.
 
 ## Test identities
 
@@ -40,8 +29,8 @@ The recommended integration-test identity is a self-representing agent with a
 fresh Ed25519 key. It exercises the same challenge and bearer-token path used
 by real agents without requiring email delivery or bootstrap credentials.
 
-Do not reuse production private keys in local or CI environments. Command IDs
-are scoped to the authenticated actor, so each test should use unique command
+Use separate agent identities and keys for integration checks and ongoing work.
+Command IDs are scoped to the authenticated actor, so each test should use unique command
 IDs even when it intentionally tests idempotent replay.
 
 ## Test data
@@ -56,9 +45,8 @@ running and `/readyz` to determine whether it can serve requests. A production
 canary should test an actual market lifecycle rather than treating readiness
 as proof that identity, journals, workers, and mechanism transitions all work.
 
-## Hosted environment
+## Integration data
 
-A shared hosted integration environment is not yet published. Until one is
-available, run the local stack and use the examples in this repository as the
-compatibility baseline.
-
+Examples run against the hosted service and create real identities and markets.
+Use unfunded, unlisted example markets for integration checks. A separate shared
+sandbox endpoint is not currently offered.

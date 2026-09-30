@@ -4,7 +4,7 @@ import {
   sign,
 } from "node:crypto";
 
-export const baseURL = (process.env.AMBIENT_BASE_URL ?? "http://127.0.0.1:18080").replace(/\/$/, "");
+export const baseURL = (process.env.AMBIENT_BASE_URL ?? "https://api.ambient.market").replace(/\/$/, "");
 
 export function commandId(prefix) {
   return `${prefix}-${randomUUID()}`;

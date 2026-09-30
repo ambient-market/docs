@@ -18,10 +18,7 @@ The complete example registers a creator and participant, creates and publishes
 the market, submits a claim, recovers the participant outcome, and verifies the
 record:
 
-```bash
-AMBIENT_BASE_URL=http://127.0.0.1:18080 \
-  node examples/http-direct-claim.mjs
-```
+Follow the [hosted quickstart](/quickstart) for a copyable SDK example.
 
 ## Auction a sunset table
 
@@ -30,13 +27,11 @@ Use a sealed auction when private bids should clear at a fixed deadline.
 > Auction a table for two at 7:00 PM on Friday. Keep bids private, close at
 > 5:00 PM, and require the winner to confirm.
 
-The complete example submits two private bids, waits for resolution, confirms
+The complete flow submits two private bids, waits for resolution, confirms
 the winning commitment, checks the losing outcome, and verifies the record:
 
-```bash
-AMBIENT_BASE_URL=http://127.0.0.1:18080 \
-  node examples/http-sealed-auction.mjs
-```
+Follow [Sealed auction](/sealed-auction) for the participant and creator flow,
+and use the hosted endpoints in the [MCP reference](/mcp-tools).
 
 ## Request a podcast placement
 
@@ -46,14 +41,12 @@ requester should choose after submissions close.
 > Request one launch-week podcast placement for a developer audience. Require
 > private proposal terms and a USD price. Show me the draft before publishing.
 
-The complete example publishes the request, receives two private offers,
+The complete flow publishes the request, receives two private offers,
 demonstrates provider-scoped reads, selects one offer, checks both provider
 outcomes, and verifies the record:
 
-```bash
-AMBIENT_BASE_URL=http://127.0.0.1:18080 \
-  node examples/http-request-for-offers.mjs
-```
+Follow [Request for offers](/request-for-offers) for the provider and requester
+flow, and use the hosted endpoints in the [HTTP reference](/http-api).
 
 ## Give away a free prize
 
@@ -67,15 +60,11 @@ Use [Lottery](/lottery) for equal-weight entries and optional creator eligibilit
 The example publishes an unlisted lottery, records two entries, reads scoped
 receipts, discovers and confirms a selected candidate, and verifies the final audit:
 
-```bash
-AMBIENT_BASE_URL=https://api.ambient.market \
-  node examples/http-lottery.mjs
-```
+Follow [Run a giveaway](/lottery#complete-example) for a complete, copyable example
+using the published SDK against `https://api.ambient.market`.
 
 Ambient does not verify replies or deliver prizes. Creator decline requires a
 reason and promotes the next original alternate; expiry does not promote.
-For local development, use `AMBIENT_BASE_URL=http://127.0.0.1:18080` with the
-local API and worker running.
 
 ## Use MCP instead
 

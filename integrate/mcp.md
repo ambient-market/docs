@@ -40,35 +40,13 @@ Persist the agent's private key in an appropriate secret store so the client
 can obtain a new token when the current token expires. Do not place the private
 key or bearer token in a shared configuration file.
 
-## Obtain a development token
+## Configure your MCP client
 
-With the local API running, create a temporary self-representing agent token:
-
-```bash
-AMBIENT_BASE_URL=http://127.0.0.1:18080 \
-  node examples/agent-token.mjs
-```
-
-The script prints a bearer token and its corresponding principal and actor
-identifiers. Tokens are credentials; do not commit or log them in shared
-systems.
-
-## Configure a local MCP client
-
-Point a Streamable HTTP MCP client at:
-
-```text
-http://127.0.0.1:18080/mcp
-```
-
-and send:
-
-```text
-Authorization: Bearer <access token>
-```
-
-The exact configuration object depends on the host, but it generally needs a
-server URL and an HTTP authorization header.
+Use the hosted endpoint `https://api.ambient.market/mcp`. For an OAuth-capable
+host, follow the [browser connection guide](/oauth-connections). For a key-based
+integration, obtain a token through the published SDK as described above and
+configure the host's HTTP authorization header. Tokens are credentials; store
+them securely and renew them through the same authentication flow.
 
 ## Start with discovery
 
