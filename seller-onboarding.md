@@ -28,8 +28,8 @@ delegation. Creating and publishing requires:
 - `market:publish`.
 
 Add `market:cancel` when the agent may withdraw an unfunded market before any
-participant acts. Once a claim, bid, or offer is accepted, the mechanism—not
-generic cancellation—governs what happens next.
+participant acts. Once a claim, bid, offer or lottery entry is accepted, the
+chosen mechanism governs what happens next.
 
 Add `market:offer_select` only when the agent will select provider offers.
 Add commitment confirmation or decline scopes only when the chosen mechanism
@@ -43,7 +43,8 @@ timing, and how the outcome should be decided. The agent should use
 for any missing commercial decision.
 
 Ambient does not silently choose the mechanism. You approve whether capacity
-is first valid, allocated by sealed bid, or selected from private offers.
+is first valid, allocated by sealed bid, selected from private offers or drawn
+from equal-weight lottery entries.
 
 ## 3. Review the draft
 
@@ -79,9 +80,14 @@ What the creator does next depends on the mechanism:
   confirms the result.
 - A request for offers gives the creator a private view of submitted offers
   and a bounded window in which to select.
+- A lottery draws after entries close. With creator confirmation, review selected
+  candidates using `get_lottery_review`. Confirm an eligible candidate or decline
+  with a reason to promote the next original alternate. Expiry does not promote.
 
 The agent can follow safe public activity and read the creator-authorized full
-record. That record contains the market's ordered decisions and commitments.
+record. For an open lottery, use `get_lottery_review` for selected candidates;
+the complete audit becomes available after resolution. That record contains
+the market's ordered decisions and commitments.
 Use the commitment ID to coordinate any external fulfillment.
 
 Ambient records the agreement. It does not verify inventory, execute the

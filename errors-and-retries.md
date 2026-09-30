@@ -46,14 +46,16 @@ Do not infer a private result from public activity:
 - participants use `GET /v1/markets/{marketId}/my-outcome` or
   `get_my_market_outcome`;
 - requesters use their scoped offer read before selecting RFO offers;
-- creators use `GET /v1/markets/{marketId}/record` or `get_market_record`; and
+- creators use `GET /v1/markets/{marketId}/record` or `get_market_record`;
+- lottery creators use `get_lottery_review` while the market is open, since
+  the complete audit returns 403 until resolution; and
 - asynchronous payment callers poll the payment operation returned for their
   command.
 
-The creator record always contains the ordered market history and a content
-hash. Direct-claim and request-for-offers records also report a successful
-state reconstruction check. Independent sealed-auction reconstruction is not
-yet implemented, so its record reports `stateReconstructed: false`.
+The available creator record contains ordered market history and a content
+hash. Direct-claim, request-for-offers and lottery records also report a
+successful state reconstruction check. Independent sealed-auction
+reconstruction is not yet implemented, so its record reports `stateReconstructed: false`.
 
 ## Report an unexpected failure
 

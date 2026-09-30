@@ -293,7 +293,8 @@ are never returned and are indistinguishable from missing markets. Public
 market projections expose the creator principal, subject, mechanism rules,
 safe mechanism state, funding requirements, credential instructions, and
 timestamps. They omit creating actors, authority references, credential IDs,
-private bid and offer IDs, commands, commitments, and payment records.
+private bid, offer and lottery entry IDs, commands, commitments and payment
+records.
 
 `GET /v1/markets` orders published markets by `updatedAt` and market ID, both
 descending. `limit` defaults to 50 and may be set from 1 through 100. Pass the
@@ -305,11 +306,11 @@ not disclose actor or participant identities, command bodies, bid or offer
 identifiers, commitment identifiers, payment references, or failure details.
 
 `GET /v1/markets/{marketId}/my-outcome` requires authentication and current
-claim, bid, or offer-submission authority for the represented principal. It
-returns that principal's accepted bid receipts, offer states, and commitments
-alongside the public market snapshot. It does not reveal other participants'
+claim, bid, offer-submission or lottery-entry authority for the represented
+principal. It returns that principal's accepted bid receipts, offer states,
+lottery entry history and commitments alongside the public market snapshot. It does not reveal other participants'
 private activity. An empty commitment list is not necessarily a final loss
-while auction promotion remains possible.
+while auction or creator-reviewed lottery promotion remains possible.
 
 The complete record includes command inputs and decisions, commitments,
 events, and integrity metadata. It remains restricted to the creator principal

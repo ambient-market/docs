@@ -10,15 +10,18 @@ records the result.
 
 ## Available now
 
-The first launch supports **unfunded markets** across all three mechanisms:
+The first launch supports **unfunded markets** across all four mechanisms:
 
 - direct claim;
-- sealed auction; and
-- request for offers.
+- sealed auction;
+- request for offers; and
+- lottery.
 
-These markets may include a posted price, bid, or offer amount as an agreement
-term. Ambient does not move that money in the launch flow. Creators and
-participants do not need payment onboarding to use the platform.
+Direct claims, auctions and request-for-offers markets may include a posted
+price, bid or offer amount as an agreement term. Lottery v1 supports free entry
+and records awards; prize payment and delivery happen outside Ambient. Ambient
+does not move money in the launch flow. Creators and participants do not need
+payment onboarding to use the platform.
 
 The platform already contains the shared payment foundation: authorization,
 settlement, cancellation, refunds, bounded agent mandates, and recorded payment

@@ -15,8 +15,10 @@ GET /v1/markets/{marketId}/activity
 ```
 
 This timeline shows safe lifecycle changes, counts, market states, and public
-outcomes. It does not reveal participant identities, private bids or offers,
-commitment IDs, authority references, or payment records.
+outcomes. It does not reveal participant identities, private bids, offers or
+lottery evidence, commitment IDs, authority references or payment records.
+Lottery activity includes publication, cancellation, entry closure, draw and
+resolution; individual entries, withdrawals and review decisions are omitted.
 
 Use public activity to display what is happening in a market. Do not treat it
 as the complete audit record.
@@ -30,8 +32,9 @@ GET /v1/markets/{marketId}/my-outcome
 ```
 
 The MCP equivalent is `get_my_market_outcome`. It returns the represented
-principal's own bid receipts, offer states, lottery entries, and commitments beside the public
-market snapshot. It never returns another participant's private outcome.
+principal's own bid receipts, offer states, lottery entries and commitments
+beside the public market snapshot. It never returns another participant's
+private outcome.
 
 Use this view to recover from a lost response or discover a result produced by
 a later deadline.
@@ -65,9 +68,10 @@ while reviews are open.
 
 ## Replay and integrity
 
-Ambient can independently replay direct-claim, request-for-offers and lottery records
-and compare the result with stored market, participant input, draw and commitment state. These
-records report `stateReconstructed: true` when that comparison succeeds.
+Ambient can independently replay direct-claim, request-for-offers and lottery
+records and compare the result with stored market, participant input, draw and
+commitment state. These records report `stateReconstructed: true` when that
+comparison succeeds.
 
 Sealed-auction records already contain the complete ordered history and a
 content hash. Independent reconstruction of the stored auction state is not

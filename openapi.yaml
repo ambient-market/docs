@@ -5,8 +5,7 @@ info:
   description: |
     Create and operate deterministic markets through authenticated HTTP
     commands. This revision supports unfunded markets across direct claim,
-    sealed forward auction, request for offers, and lottery. Lottery production
-    deployment is pending. Funded payment paths are
+    sealed forward auction, request for offers, and lottery. Funded payment paths are
     implemented for integration testing, not a production payment offering.
 
     Request bodies use strict JSON. Unknown fields and multiple JSON values are
@@ -1044,7 +1043,7 @@ paths:
       tags: [Participation]
       operationId: getLotteryReview
       summary: Read selected candidate evidence and review history
-      description: Requires current commitment:confirm authority for the creator principal. Omits seed, unselected alternates, actor IDs and grants. Drafts and non-lottery markets return not found. Decline separately requires commitment:decline and a reason. Silence/expiry does not promote an alternate.
+      description: Requires current commitment:confirm authority for the creator principal. Omits seed, unselected alternates, submitting actor metadata and grants. Selected commitments identify represented principals; a self-representing agent has the same principal and actor identifier. Drafts and non-lottery markets return not found. Decline separately requires commitment:decline and a reason. Silence/expiry does not promote an alternate.
       parameters:
         - $ref: "#/components/parameters/MarketId"
         - $ref: "#/components/parameters/ReadPrincipalId"
@@ -1407,11 +1406,12 @@ paths:
       summary: Get your outcome in a market
       description: |
         Returns the public market snapshot and only the represented principal's
-        accepted bid receipts, current offer states, and commitments. Private
-        offer terms are omitted. Use a commitment ID here
-        to confirm an allocation. An empty commitment list is not necessarily
+        accepted bid receipts, current offer states, lottery entry history and
+        commitments. Private offer terms are omitted. Use a commitment ID here
+        to confirm an allocation when participant confirmation is required.
+        Lottery creator review requires the creator to confirm the award. An empty commitment list is not necessarily
         a final loss while promotion remains possible. Requires current claim,
-        bid, or offer-submission authority for the market's mechanism.
+        bid, offer-submission or lottery-entry authority for the market's mechanism.
       parameters:
         - $ref: "#/components/parameters/MarketId"
         - $ref: "#/components/parameters/ReadPrincipalId"
@@ -3499,8 +3499,22 @@ components:
             - market.published
             - market.canceled
             - direct_claim.accepted
+            - direct_claim.closed
             - sealed_auction.bid_submitted
             - sealed_auction.resolved
+            - request_for_offers.offer_submitted
+            - request_for_offers.offer_withdrawn
+            - request_for_offers.offer_selected
+            - request_for_offers.offer_not_selected
+            - request_for_offers.offer_expired
+            - request_for_offers.offers_closed
+            - request_for_offers.resolved
+            - lottery.entry_submitted
+            - lottery.entry_withdrawn
+            - lottery.entries_closed
+            - lottery.drawn
+            - lottery.candidate_promoted
+            - lottery.resolved
             - commitment.provisional
             - commitment.awaiting_confirmations
             - commitment.committed
@@ -3810,8 +3824,19 @@ components:
             - market.publish
             - market.cancel
             - direct_claim.submit
+            - direct_claim.close
             - sealed_auction.submit_bid
             - sealed_auction.resolve
+            - request_for_offers.submit
+            - request_for_offers.withdraw
+            - request_for_offers.close
+            - request_for_offers.select
+            - request_for_offers.expire
+            - lottery.enter
+            - lottery.withdraw
+            - lottery.close
+            - lottery.draw
+            - lottery.expire_undrawn
             - commitment.confirm
             - commitment.decline
             - commitment.expire

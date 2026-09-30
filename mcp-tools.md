@@ -195,6 +195,9 @@ that returned identifier for publication and every later market operation.
 | `holdDurationSeconds` | integer | Yes | Positive winner confirmation period. |
 | `resolutionDeadline` | RFC 3339 timestamp | For funded auctions | Final promotion and resolution horizon after `closesAt`; funding must remain valid through this time plus settlement grace. |
 
+For `lottery.v1`, see [Lottery rules](/lottery#rules) for capacity, entry cutoff,
+confirmation mode, review window, resolution deadline and eligibility terms.
+
 For `request-for-offers.v1`, see [Request for offers](/request-for-offers) for
 its deadline, offer schema, selection, pricing, and confirmation fields. This
 preset supports unfunded markets only.
@@ -226,8 +229,8 @@ Returns `MarketResult`. See [Publish a market draft](/api-reference/markets/publ
 | `authorityRef` | string | No | Delegation with `market:cancel` scope when actor and principal differ. |
 
 Cancellation is deliberately narrow in v0: the market must be unfunded and
-must have no accepted claim, bid, or offer. It remains publicly readable as a
-terminal audit record, and any scheduled auction or RFO close is canceled.
+must have no accepted claim, bid, offer or lottery entry. It remains publicly
+readable as a terminal audit record, and scheduled deadline jobs are canceled.
 
 ## Read a market
 
@@ -241,11 +244,12 @@ authority; omit both for self-representation.
   denies this complete audit read; use `get_lottery_review` until resolution. See
   [Get a market record](/api-reference/records/get-a-market-record).
 - `get_my_market_outcome` returns the public market snapshot plus only the
-  represented principal's accepted bid receipts, current offer states, and
-  commitments. Offer terms remain in `get_request_for_offers`. A
-  winner can use its commitment ID to confirm; an empty commitment list is not
+  represented principal's accepted bid receipts, current offer states, lottery
+  entry history and commitments. Offer terms remain in `get_request_for_offers`.
+  A winner can use its commitment ID to confirm; an empty commitment list is not
   necessarily a final loss while promotion remains possible. Current claim,
-  bid, or offer-submission authority is required for the market's mechanism.
+  bid, offer-submission or lottery-entry authority is required for the market's
+  mechanism.
   The HTTP equivalent is `GET /v1/markets/{marketId}/my-outcome`.
 
 ## Participate
