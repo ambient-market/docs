@@ -63,8 +63,9 @@ hard resolution deadline and may be very short near that deadline.
 ## Privacy and audit
 
 Public market state shows phase and counts. Public activity contains lifecycle
-milestones, not individual entries, withdrawals, declines or expirations.
-Polling counts, versions and update times can still reveal changes.
+milestones and anonymous entry/withdrawal timestamps. Entry IDs, actor IDs and
+evidence are omitted; candidate promotions, declines and expirations stay private.
+Participation timing, counts, versions and market update times are public.
 
 Each entrant sees only its own entry history and commitments. The complete
 creator audit returns HTTP 403 while a lottery is open, including during review.

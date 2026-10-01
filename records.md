@@ -17,8 +17,10 @@ GET /v1/markets/{marketId}/activity
 This timeline shows safe lifecycle changes, counts, market states, and public
 outcomes. It does not reveal participant identities, private bids, offers or
 lottery evidence, commitment IDs, authority references or payment records.
-Lottery activity includes publication, cancellation, entry closure, draw and
-resolution; individual entries, withdrawals and review decisions are omitted.
+Lottery activity includes publication, cancellation, recorded deadline extensions,
+anonymous entries and withdrawals, entry closure, draw and resolution. Entry and
+withdrawal events show timestamps with empty data; they reveal no entry IDs,
+actor IDs or evidence. Candidate promotion and review decisions are omitted.
 
 Use public activity to display what is happening in a market. Do not treat it
 as the complete audit record.
